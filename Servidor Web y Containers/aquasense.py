@@ -38,18 +38,19 @@ import logging
 
 # Configuración de logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Inicialización de Flask
 app = Flask(__name__)
-app.config['JSON_SORT_KEYS'] = False # Mantener el orden de las claves en el JSON
+app.config["JSON_SORT_KEYS"] = False  # Mantener el orden de las claves en el JSON
 
 # Cliente DynamoDB
-dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
-table_name = os.environ.get('DYNAMODB_TABLE', 'proy-MarMenorData')
+dynamodb = boto3.resource(
+    "dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1")
+)
+table_name = os.environ.get("DYNAMODB_TABLE", "proy-MarMenorData")
 table = dynamodb.Table(table_name)
 
 logger.info(f"🚀 AquaSenseCloud API iniciada")
@@ -58,6 +59,7 @@ logger.info(f"📊 DynamoDB Table: {table_name}")
 # =======================================
 # FUNCIONES AUXILIARES
 # =======================================
+
 
 def decimal_to_float(obj):
     """
@@ -77,6 +79,7 @@ def decimal_to_float(obj):
         return [decimal_to_float(item) for item in obj]
     return obj
 
+
 def validate_parameters(request):
     """
     Valida los parámetros month y year de la request
@@ -91,16 +94,25 @@ def validate_parameters(request):
     """
     try:
         # Obtener parámetros
-        month_str = request.args.get('month')
-        year_str = request.args.get('year')
+        month_str = request.args.get("month")
+        year_str = request.args.get("year")
 
         # Verificar que existan
         if not month_str or not year_str:
-            return None, None, (jsonify({
-                'error': 'Parámetros faltantes',
-                'message': 'Los parámetros "month" y "year" son obligatorios',
-                'ejemplo': '/maxdiff?month=3&year=2017'
-            }), 400)
+            return (
+                None,
+                None,
+                (
+                    jsonify(
+                        {
+                            "error": "Parámetros faltantes",
+                            "message": 'Los parámetros "month" y "year" son obligatorios',
+                            "ejemplo": "/maxdiff?month=3&year=2017",
+                        }
+                    ),
+                    400,
+                ),
+            )
 
         # Convertir a enteros
         month = int(month_str)
@@ -108,61 +120,93 @@ def validate_parameters(request):
 
         # Validar rangos
         if not (1 <= month <= 12):
-            return None, None, (jsonify({
-                'error': 'Mes inválido',
-                'message': 'El mes debe estar entre 1 y 12',
-                'recibido': month
-            }), 400)
+            return (
+                None,
+                None,
+                (
+                    jsonify(
+                        {
+                            "error": "Mes inválido",
+                            "message": "El mes debe estar entre 1 y 12",
+                            "recibido": month,
+                        }
+                    ),
+                    400,
+                ),
+            )
 
         if not (2000 <= year <= 2100):
-            return None, None, (jsonify({
-                'error': 'Año inválido',
-                'message': 'El año debe estar entre 2000 y 2100',
-                'recibido': year
-            }), 400)
+            return (
+                None,
+                None,
+                (
+                    jsonify(
+                        {
+                            "error": "Año inválido",
+                            "message": "El año debe estar entre 2000 y 2100",
+                            "recibido": year,
+                        }
+                    ),
+                    400,
+                ),
+            )
 
         return month, year, None
 
     except ValueError:
-        return None, None, (jsonify({
-            'error': 'Formato de parámetros inválido',
-            'message': 'Los parámetros "month" y "year" deben ser números enteros',
-            'recibido': {
-                'month': request.args.get('month'),
-                'year': request.args.get('year')
-            }
-        }), 400)
+        return (
+            None,
+            None,
+            (
+                jsonify(
+                    {
+                        "error": "Formato de parámetros inválido",
+                        "message": 'Los parámetros "month" y "year" deben ser números enteros',
+                        "recibido": {
+                            "month": request.args.get("month"),
+                            "year": request.args.get("year"),
+                        },
+                    }
+                ),
+                400,
+            ),
+        )
+
 
 # =======================================
 # ENDPOINTS
 # =======================================
 
-@app.route('/', methods=['GET'])
+
+@app.route("/", methods=["GET"])
 def index():
     """
     Endpoint raíz - Información de la API
     """
-    return jsonify({
-        'servicio': 'AquaSenseCloud API',
-        'version': '1.0',
-        'description': 'API REST para consultar datos de temperatura del Mar Menor',
-        'endpoints': {
-            '/health': 'Health check del servidor',
-            '/maxdiff': 'Diferencia de máxima temperatura mensual vs mes anterior',
-            '/sd': 'Máxima desviación estándar mensual',
-            '/temp': 'Temperatura media mensual',
-            '/months': 'Lista de meses con datos disponibles'
-        },
-        'uso': {
-            'maxdiff': 'GET /maxdiff?month=3&year=2017',
-            'sd': 'GET /sd?month=3&year=2017',
-            'temp': 'GET /temp?month=3&year=2017',
-            'months': 'GET /months'
-        },
-        'proyecto': 'Infraestructura para la Computación de Altas Prestaciones - UPCT'
-    }), 200
+    return jsonify(
+        {
+            "servicio": "AquaSenseCloud API",
+            "version": "1.0",
+            "description": "API REST para consultar datos de temperatura del Mar Menor",
+            "endpoints": {
+                "/health": "Health check del servidor",
+                "/maxdiff": "Diferencia de máxima temperatura mensual vs mes anterior",
+                "/sd": "Máxima desviación estándar mensual",
+                "/temp": "Temperatura media mensual",
+                "/months": "Lista de meses con datos disponibles",
+            },
+            "uso": {
+                "maxdiff": "GET /maxdiff?month=3&year=2017",
+                "sd": "GET /sd?month=3&year=2017",
+                "temp": "GET /temp?month=3&year=2017",
+                "months": "GET /months",
+            },
+            "proyecto": "Infraestructura para la Computación de Altas Prestaciones - UPCT",
+        }
+    ), 200
 
-@app.route('/health', methods=['GET'])
+
+@app.route("/health", methods=["GET"])
 def health_check():
     """
     Health check endpoint para Application Load Balancer.
@@ -178,24 +222,24 @@ def health_check():
         # Verificar conectividad con DynamoDB
         table.table_status
 
-        logger.info('✅ Health check: OK')
+        logger.info("✅ Health check: OK")
 
-        return jsonify({
-            'status': 'healthy',
-            'servicio': 'AquaSenseCloud API',
-            'tabla': table_name,
-            'mensaje': 'Servicio operativo'
-        }), 200
+        return jsonify(
+            {
+                "status": "healthy",
+                "servicio": "AquaSenseCloud API",
+                "tabla": table_name,
+                "mensaje": "Servicio operativo",
+            }
+        ), 200
 
     except Exception as e:
         logger.error(f"❌ Health check failed: {str(e)}")
 
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e)
-        }), 503
+        return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
-@app.route('/maxdiff', methods=['GET'])
+
+@app.route("/maxdiff", methods=["GET"])
 def get_maxdiff():
     """
     Endpoint: /maxdiff?month=M&year=Y
@@ -216,3 +260,115 @@ def get_maxdiff():
             "record_count": 3
         }
     """
+    try:
+        # Validar parámetros
+        month, year, error_response = validate_parameters(request)
+        if error_response:
+            return error_response
+
+        # Contruir clave de búsqueda
+        month_year = f"{year}-{month:02d}"
+
+        logger.info(f"📊 Consultando maxdiff: {month_year}")
+
+        # Consultar DynamoDB
+        response = table.get_item(
+            key={"month_year": month_year, "metric_type": "maxdiff"}
+        )
+
+        # Verificar si existe el registro
+        if "Item" not in response:
+            logger.warning(f"⚠️ No hay datos para {month_year}")
+            return jsonify(
+                {
+                    "error": "Datos no encontrados",
+                    "message": f"No hay datos disponibles para {month}/{year}",
+                    "month": month,
+                    "year": year,
+                }
+            ), 404
+
+        # Preparar respuesta
+        item = decimal_to_float(response["Item"])
+
+        result = {
+            "month": month,
+            "year": year,
+            "maxdiff": item["value"],
+            "max_temp": item.get("max_temp"),
+            "last_updated": item.get("last_updated"),
+            "record_count": item.get("record_count"),
+        }
+
+        logger.info(f"✅ Maxdiff {month_year}: {item['value']}")
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error en /maxdiff: {str(e)}")
+        return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
+
+
+@app.route("/sd", methods=["GET"])
+def get_sd():
+    """
+    Endpoint: /sd?month=3&year=2017
+
+    Retorna la máxima desviación estándar de temperatura del mes especificado.
+
+    Ejemplo:
+        GET /sd?month=3&year=2017
+
+        Respuesta:
+        {
+            "month": 3,
+            "year": 2017,
+            "sd": 0.6254,
+            "last_updated": "2024-11-07T10:30:00Z",
+            "record_count": 2
+        }
+    """
+    try:
+        # Validar parámetros
+        month, year, error_response = validate_parameters(request)
+        if error_response:
+            return error_response
+
+        # Contruir clave de búsqueda
+        month_year = f"{year}-{month:02d}"
+
+        logger.info(f"📊 Consultando sd: {month_year}")
+
+        # Consultar DynamoDB
+        response = table.get_item(Key={"month_year": month_year, "metric_type": "sd"})
+
+        # Verificar si existe el registro
+        if "Item" not in response:
+            logger.warning(f"⚠️ No hay datos para {month_year}")
+            return jsonify(
+                {
+                    "error": "Datos no encontrados",
+                    "message": f"No hay datos disponibles para {month}/{year}",
+                    "month": month,
+                    "year": year,
+                }
+            ), 404
+
+        # Preparar respuesta
+        item = decimal_to_float(response["Item"])
+
+        result = {
+            "month": month,
+            "year": year,
+            "sd": item["value"],
+            "last_updated": item.get("last_updated"),
+            "record_count": item.get("record_count"),
+        }
+
+        logger.info(f"✅ SD {month_year}: {item['value']}")
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error en /sd: {str(e)}")
+        return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
