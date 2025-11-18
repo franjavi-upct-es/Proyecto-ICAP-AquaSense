@@ -1,0 +1,21 @@
+# Paquetes para AquaSenseCloud API
+# Python 3.11+
+# Proyecto: Infraestructuras para la Computación de Altas Prestaciones - UPCT
+
+# Framework web
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# AWS SDK para Python
+boto3==1.34.0
+botocore==1.34.0
+
+# Servidor WSGI para producción (usado en Docker)
+gunicorn==21.2.0
+
+# Utilidades
+python-dotenv==1.0.0
+
+# Para desarrollo local
+pytest==7.4.3
+requests==2.31.0
