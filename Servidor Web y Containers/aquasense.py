@@ -27,7 +27,6 @@ Variables de Entorno:
 
 from flask import Flask, request, jsonify
 import boto3
-from boto3.dynamodb.conditions import Key
 import os
 from decimal import Decimal
 import logging
@@ -372,3 +371,179 @@ def get_sd():
     except Exception as e:
         logger.error(f"❌ Error en /sd: {str(e)}")
         return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
+
+
+@app.route("/temp", methods=["GET"])
+def get_temp():
+    """
+    Endpoint: /temp?month=M&year=Y
+
+    Retorna la temperatura media anual del mes especificado.
+
+    Ejemplo:
+        GET /temp?month=3&year=2017
+
+        Respuesta:
+        {
+            "month": 3,
+            "year": 2017,
+            "temp": 17.06,
+            "max_temp": 17.33,
+            "last_updated": "2024-11-07T10:30:00Z",
+            "record_count": 2
+        }
+    """
+    try:
+        # Validar parámetros
+        month, year, error_response = validate_parameters(request)
+        if error_response:
+            return error_response
+
+        # Construir clave de búsqueda
+        month_year = f"{year}-{month:02d}"
+
+        logger.info(f"📊 Consultando temp: {month_year}")
+
+        # Consultar DynamoDB
+        response = table.get_item(Key={"month_year": month_year, "metric_type": "temp"})
+
+        # Verificar si existe el registro
+        if "Item" not in response:
+            logger.warning(f"⚠️ No hay datos para {month_year}")
+            return jsonify(
+                {
+                    "error": "Datos no encontrados",
+                    "message": f"No hay datos disponibles para {month}/{year}",
+                    "month": month,
+                    "year": year,
+                }
+            ), 404
+
+        # Preparar respuesta
+        item = decimal_to_float(response["Item"])
+
+        result = {
+            "month": month,
+            "year": year,
+            "temp": item["value"],
+            "max_temp": item.get("max_temp"),
+            "last_updated": item.get("last_updated"),
+            "record_count": item.get("record_count"),
+        }
+
+        logger.info(f"✅ Temp {month_year}: {item['value']}")
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error en /temp: {str(e)}")
+        return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
+
+
+@app.route("/months", methods=["GET"])
+def get_available_months():
+    """
+    Endpoint: /months
+
+    Lista todos los meses disponibles en la base de datos.
+    Útil para que los analistas conozcan qué datos están disponibles.
+
+    Respuesta:
+    {
+        "months": [
+            {"month_year": "2017-03", "metrics": ["maxdiff", "sd", "temp"]},
+            {"month_year": "2017-04", "metrics": ["maxdiff", "sd", "temp"]}
+        ],
+        "count": 2
+    }
+    """
+    try:
+        logger.info("📊 Listando meses disponibles")
+
+        # Escanear tabla (apropiado para datasets pequeños)
+        response = table.scan()
+        items = response.get("Items", [])
+
+        # Agrupar por mes
+        months_dict = {}
+        for item in items:
+            month_year = item["month_year"]
+            metric_type = item["metric_type"]
+
+            if month_year not in months_dict:
+                months_dict[month_year] = {"month_year": month_year, "metrics": []}
+
+            months_dict[month_year]["metrics"].append(metric_type)
+
+        # Convertir a lista y ordenar
+        months_list = sorted(months_dict.values(), key=lambda x: x["month_year"])
+
+        logger.info("✅ Total meses: {len(months_list)}")
+
+        return jsonify({"months": months_list, "count": len(months_list)}), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error en /months: {str(e)}")
+        return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
+
+
+# =======================================
+# MANEJO DE ERRORES GLOBALES
+# =======================================
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """Manejo de error 404 - Endpoint no encontrado"""
+    logger.warning(f"⚠️ Endpoint no encontrado: {request.path}")
+    return jsonify(
+        {
+            "error": "Endpoint no encontrado",
+            "message": f'El endpoint "{request.path}" no existe',
+            "endpoints_disponibles": [
+                "/",
+                "/health",
+                "/maxdiff",
+                "/sd",
+                "/temp",
+                "/months",
+            ],
+        }
+    ), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Majeo de error 500 - Error interno"""
+    logger.error(f"❌ Error interno del servidor: {str(error)}")
+    return jsonify(
+        {
+            "error": "Error interno del servidor",
+            "message": "Ha ocurrido un error inesperado. Por favor, inténtelo de nuevo.",
+        }
+    ), 500
+
+
+# =======================================
+# PUNTO DE ENTRADA
+# =======================================
+
+if __name__ == "__main__":
+    """
+    Punto de entrada para ejecuación local o en producción.
+
+    Variables de entorno:
+        PORT: Puerto del servidor (default: 8080)
+        DEBUG: Modo debug (default: False)
+    """
+    port = int(os.environ.get("PORT", 8080))
+    debug = os.environ.get("DEBUG", "False").lower() == "true"
+
+    logger.info("=" * 70)
+    logger.info(f"🚀 Iniciando AquaSenseCloud API")
+    logger.info(f"   Puerto: {port}")
+    logger.info(f"   Debug: {debug}")
+    logger.info(f"   DynamoDB Table: {table_name}")
+    logger.info("=" * 70)
+
+    app.run(host="0.0.0.0", port=port, debug=debug)

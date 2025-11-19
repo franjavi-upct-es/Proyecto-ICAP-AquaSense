@@ -1,0 +1,53 @@
+# Dockerfile para AquaSenseCloud API
+# Imagen optimizada para ECS Fargate
+
+# Imagen base oficial de Python
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="aquasensecloud@upct.es"
+LABEL description="API REST para consultar datos del Mar Menor"
+LABEL version="1.0"
+LABEL project="AquaSenseCloud - ICAP UPCT"
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1 \
+  PYTHONDONTWRITEBYTECODE=1 \
+  PORT=8080 \
+  AWS_DEFAULT_REGION=us-east-1
+
+# Instalar dependencias del sistema necesarias
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends \
+  curl \
+  && rm -rf /var/lib/apt/lists/*
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar requirements primero (para aprovechar cache de Docker)
+COPY requirements.txt .
+
+# Instalar dependencias de Python
+RUN pip install --no-cache-dir --upgrade pip && \
+  pip install --no-cache-dir -r requirements.txt
+
+# Copiar código de la aplicación
+COPY aquasense.py .
+
+# Cerar usuario no-root para seguridad
+RUN useradd -m -u 1000 appuser && \
+  chown -R appuser:appuser /app
+
+# Cambiar a usuario no-root
+USER appuser
+
+# Exponer puerto
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \ 
+  CMD curl -f http://localhost:8080/health || exit 1
+
+# Comando de inicio (usando gunicorn para producción)
+CMD [ "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "60", "--access-logfile", "-", "--eror-logfile", "-", "aquasense:app" ]
