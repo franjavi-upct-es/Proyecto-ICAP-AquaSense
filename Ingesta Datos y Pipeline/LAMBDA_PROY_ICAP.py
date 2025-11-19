@@ -30,7 +30,6 @@ def lambda_handler(event, context):
       for row in reader:
          rowCount += 1
 # Show the row in the debug log
-         print(row['store'], row['item'], row['count'])
          try:
             fecha = date.strptime(f"{row['Fecha']}", "%Y/%m/%d")
             mes = fecha.month
@@ -53,4 +52,5 @@ def lambda_handler(event, context):
             print(e)
             print("Unable to insert data into DynamoDB table".format(e))
 # Finished!
+
    return "%d counts inserted" % rowCount
