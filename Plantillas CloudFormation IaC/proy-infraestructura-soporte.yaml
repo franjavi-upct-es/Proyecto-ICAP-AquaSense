@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AquaSenseCloud - Infraestructura de Soporte (VPC, S3, DynamoDB, Lambda, SNS)"
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: proy
+    Description: Prefijo para nombrar todos los recursos del proyecto
+
+  ProfesorEmail:
+    Type: String
+    Decription: Email del profesor para recibir notificaciones de alarmas
+    Default: franciscojavier.mercader@edu.upct.es
+
+Resources:
+  # ============================================================================
+  # VPC Y NETWORKING
+  # ============================================================================
+
+  MarMenorVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectPrefix}-marmenor-vpc"
+        - Key: Project
+          Value: AquaSenseCloud
+
+  # Intenet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectPrefix}-internet-gateway"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MarMenorVPC
+      InternetGatewayId: !Ref InternetGateway
+
+    # Subnets Públicas (para ALB y NAT Gateway)
+    PublicSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        CidrBlock: 10.0.1.0/24
+        AvailabilityZone: !Select [0, !GetAZs ""]
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-public-subnet-1a"
+          - Key: Type
+            Value: Public
+
+    PublicSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        CidrBlock: 10.0.2.0/24
+        AvailabilityZone: !Select [1, !GetAZs ""]
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-public-subnet-1b"
+          - Key: Type
+            Value: Public
+
+    # Subnets Privadas (para ECS y Lambda)
+    PrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        CidrBlock: 10.0.11.0/24
+        AvailabilityZone: !Select [0, !GetAZs ""]
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-private-subnet-1a"
+          - Key: Type
+            Value: Public
+
+    PrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        CidrBlock: 10.0.12.0/24
+        AvailabilityZone: !Select [1, !GetAZs ""]
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-private-subnet-1b"
+          - Key: Type
+            Value: Public
+
+    # NAT Gateway y Elastic IP
+    NatGatewayEIP:
+      Type: AWS::EC2::EIP
+      DependsOn: AttachGateway
+      Properties:
+        Domain: vpc
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-nat-eip"
+
+    NatGateway:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId: !GetAtt NatGatewayEIP.AllocationId
+        SubnetId: !Ref PublicSubnet1
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-nat-gateway"
+
+    # Route Tables
+    PublicRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-public-rt"
+
+    PublicRoute:
+      Type: AWS::EC2::Route
+      DependsOn: AttachGateway
+      Properties:
+        RouteTableId: !Ref PublicRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref InternetGateway
+
+    PublicSubnet1RouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet1
+        RouteTableId: !Ref PublicRouteTable
+
+    PublicSubnet2RouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet2
+        RouteTableId: !Ref PublicRouteTable
+
+    PrivateRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref MarMenorVPC
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-private-rt"
+
+    PrivateRoute:
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId: !Ref PrivateRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NatGateway
+
+    PrivateSubnet1RouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PrivateSubnet1
+        RouteTableId: !Ref PrivateRouteTable
+
+    PrivateSubnet2RouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PrivateSubnet2
+        RouteTableId: !Ref PrivateRouteTable
+
+    # ============================================================================
+    # SECURITY GROUPS
+    # ============================================================================
+
+    ALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Sub "${ProjectPrefix}-alb-sg"
+        GroupDescription: Security group for Application Load Balancer
+        VpcId: !Ref MarMenorVPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+            Description: Allow HTTP from anywhere
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: 0.0.0.0/0
+            Description: Allow HTTPS from anywhere
+        SecurityGroupEgress:
+          - IpProtocol: -1
+            CidrIp: 0.0.0.0/0
+            Description: Allow all outbound traffic
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-alb-sg"
+
+    ECSSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Sub "${ProjectPrefix}-ecs-sg"
+        GroupDescription: Security group for ECS taks
+        VpcId: !Ref MarMenorVPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 8080
+            ToPort: 8080
+            SourceSecurityGroupId: !Ref ALBSecurityGroup
+            Description: Allow traffic from ALB on port 8080
+        SecurityGroupEgress:
+          - IpProtocol: -1
+            CidrIp: 0.0.0.0/0
+            Description: Allow all outbound traffic
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-ecs-sg"
+
+    LambdaSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: !Sub "${ProjectPrefix}-lambda-sg"
+        GroupDescription: Security group for Lambda functions
+        VpcId: !Ref MarMenorVPC
+        SecurityGroupEgress:
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: 0.0.0.0/0
+            Description: Allow HTTPS for AWS services
+        Tags:
+          - Key: Name
+            Value: !Sub "${ProjectPrefix}-lambda-sg"
