@@ -345,23 +345,23 @@ def get_previous_month_max_temp(current_year, current_month):
         prev_month = 12
         prev_year -= 1
 
-    prev_key = f"{prev_year}-{prev_moth:02d}"
+    prev_key = f"{prev_year}-{prev_month:02d}"
 
-try:
-    # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
-    response = table.get_item(
-        Key={
-            'month_year': prev_key,
-            'metric_type': 'temp'
-        }
-    )
-    if 'Item' in response:
-        # DynamoDB devuelve Decimal, convertimos a float
-        return float(response['Item'].get('max_temp', 0))
-except Exception as e:
-    print(f"No se pudo obtener datos del mes {prev_key}: {e}")
+    try:
+        # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
+        response = table.get_item(
+            Key={
+                'month_year': prev_key,
+                'metric_type': 'temp'
+            }
+        )
+        if 'Item' in response:
+            # DynamoDB devuelve Decimal, convertimos a float
+            return float(response['Item'].get('max_temp', 0))
+    except Exception as e:
+        print(f"No se pudo obtener datos del mes {prev_key}: {e}")
 
-return None # No hay datos previos
+    return None # No hay datos previos
 
 # ============================================================================
 # FUNCIONES DE CÁLCULO DE MÉTRICAS
