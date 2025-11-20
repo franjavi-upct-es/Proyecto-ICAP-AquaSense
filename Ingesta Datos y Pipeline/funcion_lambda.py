@@ -79,9 +79,9 @@ def lambda_handler(event, context):
         bucket = event["Records"][0]["s3"]["bucket"]["name"]
         key = event["Records"][0]["s3"]["object"]["key"]
 
-        print("\n📁 Procesando archivo:")
-        print(f"   Bucket: {bucket}")
-        print(f"   Key: {key}")
+        print("Procesando archivo:")
+        print(f"\tBucket: {bucket}")
+        print(f"\tKey: {key}")
 
         # 1. Leer archivo CSV de S3
         csv_data = read_csv_from_s3(bucket, key)
@@ -99,9 +99,9 @@ def lambda_handler(event, context):
         store_in_dynamodb(monthly_metrics)
 
         print("\n" + "=" * 70)
-        print("✅ PROCESAMIENTO COMPLETADO EXITOSAMENTE")
+        print("PROCESAMIENTO COMPLETADO EXITOSAMENTE")
         print("=" * 70)
-        print(f"📊 Número de registros mensuales actualizados: {len(monthly_metrics)}")
+        print(f"Número de registros mensuales actualizados: {len(monthly_metrics)}")
 
         return {
             "statusCode": 200,
@@ -116,8 +116,8 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        print("\n" + "=" * 70)
-        print(f"❌ ERROR EN EL PROCESAMIENTO: {str(e)}")
+        print("=" * 70)
+        print(f"ERROR EN EL PROCESAMIENTO: {str(e)}")
         print("=" * 70)
 
         import traceback
@@ -210,7 +210,7 @@ def parse_csv_data(csv_content: str) -> list:
 
             if not fecha:
                 print(
-                    f"⚠️ ADVERTENCIA: No se pudo parsear fecha en línea {row_num}: {fecha_str}"
+                    f"ADVERTENCIA: No se pudo parsear fecha en línea {row_num}: {fecha_str}"
                 )
                 continue
 
@@ -229,13 +229,13 @@ def parse_csv_data(csv_content: str) -> list:
             )
 
         except KeyError as e:
-            print(f"⚠️ ADVERTENCIA: Columna faltante en línea {row_num}: {e}")
+            print(f"ADVERTENCIA: Columna faltante en línea {row_num}: {e}")
             continue
         except ValueError as e:
-            print(f"⚠️ ADVERTENCIA: Error de conversión en línea {row_num}: {e}")
+            print(f"ADVERTENCIA: Error de conversión en línea {row_num}: {e}")
             continue
         except Exception as e:
-            print(f"⚠️ ADVERTENCIA: Error inesperado en línea {row_num}: {e}")
+            print(f"ADVERTENCIA: Error inesperado en línea {row_num}: {e}")
             continue
 
     print(f"Total de registros semanales parseados: {len(weekly_data)}")
@@ -263,7 +263,7 @@ def check_deviation_alerts(weekly_data: list, filename: str):
         weekly_data: lista de registros semanales
         filename: Nombre del archivo procesado
     """
-    print(f"\n🚨 Verificando alarmas (umbral: {DEVIATION_THRESHOLD}°C)...")
+    print(f"Verificando alarmas (umbral: {DEVIATION_THRESHOLD}°C)...")
 
     alerts_sent = 0
 
@@ -273,9 +273,9 @@ def check_deviation_alerts(weekly_data: list, filename: str):
             alerts_sent += 1
 
     if alerts_sent > 0:
-        print(f"✓ Total alertas enviadas: {alerts_sent}")
+        print(f"Total alertas enviadas: {alerts_sent}")
     else:
-        print("✓ No se detectaron desviaciones que superen el umbral")
+        print("No se detectaron desviaciones que superen el umbral")
 
 
 def send_alert(record: dict, filename: str):
@@ -335,7 +335,7 @@ Infraestructuras para la Computación de Altas Prestaciones - UPCT
         print(f"SNS MessageId: {response['MessageId']}")
 
     except Exception as e:
-        print(f"❌ ERROR enviando alerta SNS: {str(e)}")
+        print(f"ERROR enviando alerta SNS: {str(e)}")
 
 def get_previous_month_max_temp(current_year, current_month):
     # Calcular mes anterior
@@ -391,7 +391,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
                 'record_count': int
             }, ...]
     """
-    print("📊 Calculando métricas mensuales...")
+    print("Calculando métricas mensuales...")
 
     # 1. Agrupar datos por mes/año
     monthly_groups = defaultdict(list)
@@ -476,7 +476,7 @@ def store_in_dynamodb(monthly_metrics: list):
     Args:
         monthly_metrics: Lista con métricas mensuales calculadas
     """
-    print("💾 Almacenando datos en DynamoDB...")
+    print("Almacenando datos en DynamoDB...")
 
     timestamp = datetime.now().isoformat()
     total_updates = 0
@@ -527,9 +527,40 @@ def store_in_dynamodb(monthly_metrics: list):
             )
 
             total_updates += 3
-            print(f"✓ {month_year}: 3 métricas almacenadas")
+            print(f"{month_year}: 3 métricas almacenadas")
 
         except Exception as e:
-            print(f"❌ ERROR almacenando {month_year}: {str(e)}")
+            print(f"ERROR almacenando {month_year}: {str(e)}")
 
-    print(f"✓ Total actualizaciones en DynamoDB: {total_updates}")
+    print(f"Total actualizaciones en DynamoDB: {total_updates}")
+
+# ============================================================================
+# FUNCIÓN PARA TESTING LOCAL
+# ============================================================================
+
+if __name__ == "__main__":
+    """
+    Código para testing local de la función Lambda.
+    No se ejecuta en AWS Lambda.
+    """
+    print("=" * 3 + "Modo de testing local" + "=" * 3)
+    print("Este código solo debe ejecutarse para desarrollo local")
+    
+    # Ejemplo de evento S3 para testing
+    test_event = {
+        'Records': [{
+            's3': {
+                'bucket': {'name': 'proy-marmenor-data-raw-test'},
+                'object': {'key': 'temperatura_test.csv'}
+            }
+        }]
+    }
+    
+    # Mock de variables de entorno
+    os.environ['DYNAMODB_TABLE'] = 'proy-MarMenorData'
+    os.environ['SNS_TOPIC_ARN'] = 'arn:aws:sns:us-east-1:123456789012:proy-marmenor-alerts'
+    os.environ['DEVIATION_THRESHOLD'] = '0.5'
+    
+    # Ejecutar handler
+    result = lambda_handler(test_event, None)
+    print(f"\nResultado: {json.dumps(result, indent=2)}")
