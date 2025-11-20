@@ -30,12 +30,12 @@ def make_csv_from_csv(name_csv='Temperatura.csv', seed=None, len_csv=20):
         lines_csv = csv_file.readlines()
     if seed != None:
         np.random.seed(seed)
-    index = np.random.randint(1, len(lines_csv) - len_csv)
+    index = np.random.randint(1, len(lines_csv), len_csv)
     
     file_number = get_next_count()
     with open(f'temperatura_{file_number}.csv', 'w') as new_csv:
         new_csv.write(lines_csv[0])  # encabezado
-        for l in range(index, index + len_csv):
+        for l in index:
             new_csv.write(lines_csv[l])
             
 make_csv_from_csv()
