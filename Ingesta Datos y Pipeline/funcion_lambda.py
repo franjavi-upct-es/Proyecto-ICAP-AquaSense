@@ -337,6 +337,31 @@ Infraestructuras para la Computación de Altas Prestaciones - UPCT
     except Exception as e:
         print(f"❌ ERROR enviando alerta SNS: {str(e)}")
 
+def get_previous_month_max_temp(current_year, current_month):
+    # Calcular mes anterior
+    prev_month = current_month - 1
+    prev_year = current_year
+    if prev_month == 0:
+        prev_month = 12
+        prev_year -= 1
+
+    prev_key = f"{prev_year}-{prev_moth:02d}"
+
+try:
+    # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
+    response = table.get_item(
+        Key={
+            'month_year': prev_key,
+            'metric_type': 'temp'
+        }
+    )
+    if 'Item' in response:
+        # DynamoDB devuelve Decimal, convertimos a float
+        return float(response['Item'].get('max_temp', 0))
+except Exception as e:
+    print(f"No se pudo obtener datos del mes {prev_key}: {e}")
+
+return None # No hay datos previos
 
 # ============================================================================
 # FUNCIONES DE CÁLCULO DE MÉTRICAS
@@ -392,11 +417,20 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
         avg_temperature = sum(r["media"] for r in records) / len(records)
         max_temperature = max(r["media"] for r in records)
 
-        # Calcular diferencia con el mes anterior
-        if previous_max_temp is not None:
-            temp_diff = max_temperature - previous_max_temp
+        # 1. Intentar obtener max_temp del mes anterior de la variable local (si venía en el mismo CSV)
+        prev_max_db = None
+    
+        # 2. Si no está en local, buscar en DynamoDB (caso de subida incremental)
+        if previous_max_temp is None:
+            prev_max_db = get_previous_month_max_temp(records[0]['year'], records[0]['month'])
         else:
-            temp_diff = 0.0  # Primer mes, no hay diferencia
+            prev_max_db = previous_max_temp
+
+        # 3. Calcular diferencia
+        if prev_max_db is not None:
+            temp_diff = max_temperature - prev_max_db
+        else:
+            temp_diff = 0.0 # Es el primer dato histórico que tenemos
 
         monthly_metrics.append(
             {
