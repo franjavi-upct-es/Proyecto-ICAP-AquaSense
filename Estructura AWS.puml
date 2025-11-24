@@ -1,0 +1,119 @@
+@startuml AWS_Clean_Layout
+' --- Configuración ---
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/AWSSimplified.puml
+!include AWSPuml/Compute/EC2.puml
+!include AWSPuml/Compute/EC2Instance.puml
+!include AWSPuml/Compute/Lambda.puml
+!include AWSPuml/Compute/EC2AutoScaling.puml
+!include AWSPuml/Groups/AWSCloud.puml
+!include AWSPuml/Groups/VPC.puml
+!include AWSPuml/Groups/Region.puml
+!include AWSPuml/Groups/PublicSubnet.puml
+!include AWSPuml/Groups/AvailabilityZone.puml
+!include AWSPuml/Groups/SecurityGroup.puml
+!include AWSPuml/General/AuthenticatedUser.puml
+!include AWSPuml/NetworkingContentDelivery/VPCInternetGateway.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
+!include AWSPuml/Storage/SimpleStorageServiceBucket.puml
+!include AWSPuml/ApplicationIntegration/SimpleNotificationServiceEmailNotification.puml
+!include AWSPuml/ApplicationIntegration/SimpleNotificationService.puml
+!include AWSPuml/Database/DynamoDB.puml
+!include AWSPuml/Containers/ElasticContainerServiceTask.puml
+!include AWSPuml/Containers/ElasticContainerServiceService.puml
+!include AWSPuml/Containers/ElasticContainerRegistryImage.puml
+!include AWSPuml/Containers/ElasticContainerRegistry.puml
+!include AWSPuml/Containers/ElasticContainerService.puml
+!include AWSPuml/Containers/Fargate.puml
+
+hide stereotype
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+AWSCloudGroup(aws_cloud) {
+    RegionGroup(region) {
+
+        ' --- CAPAS SUPERIORES (Invisibles) ---
+        ' Usamos " " para quitar el titulo y #line:transparent para quitar el borde
+        rectangle " " as logic_layer #line:transparent {
+            AuthenticatedUser(user, "", "")
+            SimpleStorageServiceBucket(s3_bucket, "Bucket", "")
+            Lambda(lambda, "AWS Lambda", "")
+            SimpleNotificationService(sns, "SNS", "")
+            SimpleNotificationServiceEmailNotification(notification, "Notification", "")
+        }
+
+        rectangle " " as artifact_layer #line:transparent {
+             DynamoDB(dynamodb, "DynamoDB", "")
+             ElasticContainerServiceTask(tasks, "proy-AS-Task", "")
+             ElasticContainerRegistryImage(image, "", "")
+             ElasticContainerRegistry(ecr, "proy-repo-aquasense", "")
+        }
+
+        ' --- VPC ---
+        VPCGroup(vpc, "VPC: 192.168.0.0/16") {
+            
+            VPCInternetGateway(igw, "Internet: gatewary", "")
+            ElasticLoadBalancingApplicationLoadBalancer(alb, "proy-Cluster-AS\nALBSecurityGroup", "")
+            ElasticContainerServiceService(service, "proy-AS-Service", "")
+            
+            ' GRUPO DE SEGURIDAD (Mantenemos este visible si quieres la caja roja, 
+            ' si no, cambia SecurityGroupGroup por un rectangle transparente también)
+            SecurityGroupGroup(cluster_sg, "proy-Cluster-AS-TaskSecurityGroup") {
+                
+                ' 1. Zona A (Izquierda)
+                AvailabilityZoneGroup(az_A, "Availability Zone A (us-east-1a)") {
+                    PublicSubnetGroup(az_A_public, "proy-public-subnet-zone1\n192.168.1.0/24") {
+                        Fargate(fargate1, "Fargate", "")
+                    }
+                }
+
+                ' 2. Centro (Invisibilizado)
+                rectangle " " as center_stack #line:transparent {
+                    EC2AutoScaling(autoscaling, "AutoScaling", "")
+                    ElasticContainerService(ecs, "proy-AS-Cluster", "")
+                }
+
+                ' 3. Zona B (Derecha)
+                AvailabilityZoneGroup(az_B, "Availability Zone B (us-east-1b)") {
+                    PublicSubnetGroup(az_B_public, "proy-public-subnet-zone2\n192.168.2.0/24") {
+                        Fargate(fargate2, "Fargate", "")
+                    }
+                }
+            }
+        }
+    }
+}
+
+' --- RELACIONES ---
+
+user -> s3_bucket
+s3_bucket -> lambda
+lambda -> sns
+sns -> notification
+lambda -down-> dynamodb
+
+ecr <-left- image
+image <-left- tasks
+tasks -left-> dynamodb
+tasks -down-> service
+
+igw -left-> alb
+alb -left-> service
+service -down-> autoscaling
+autoscaling -down-> ecs
+
+' --- LAYOUT HINTS ---
+
+logic_layer -[hidden]down-> artifact_layer
+artifact_layer -[hidden]down-> vpc
+
+' Alineación horizontal estricta
+az_A -[hidden]left-> center_stack
+center_stack -[hidden]left-> az_B
+
+service -[hidden]down-> center_stack
+
+@enduml
