@@ -193,25 +193,24 @@ def parse_csv_data(csv_content: str) -> list:
     print("Parseando datos CSV...")
 
     # Formatos de fecha esperados
-    date_formats = ["%Y/%m/%d", "%d/%m%Y", "%Y-%m-%d"]
+    date_formats = ["%Y/%m/%d"]
 
     for row_num, row in enumerate(reader, start=2):  # Línea siguiente a header
         try:
             fecha_str = row["Fecha"].strip()
 
             # Intentar parsear la fecha con diferentes formatos
-            fecha = None
-            for fmt in date_formats:
-                try:
-                    fecha = datetime.strptime(fecha_str, fmt)
-                    break
-                except ValueError:
-                    continue
-
-            if not fecha:
-                print(
-                    f"ADVERTENCIA: No se pudo parsear fecha en línea {row_num}: {fecha_str}"
-                )
+            try:
+                fecha = datetime.strptime(fecha_str, "%Y/%m/%d")
+                mes = fecha.month
+                año = fecha.year
+                if fecha.day < 4:
+                    mes -= 1
+                    if mes == 0:
+                        mes = 12
+                        año -= 1
+            except Exception as e:
+                print(f"No se pudo parsear fecha en línea {row_num}: {fecha_str}")
                 continue
 
             # Parsear valores numéricos
@@ -221,8 +220,8 @@ def parse_csv_data(csv_content: str) -> list:
             weekly_data.append(
                 {
                     "fecha": fecha,
-                    "year": fecha.year,
-                    "month": fecha.month,
+                    "year": año,
+                    "month": mes,
                     "media": media,
                     "desviacion": desviacion,
                 }
@@ -244,6 +243,7 @@ def parse_csv_data(csv_content: str) -> list:
         raise Exception("No se pudieron parsear registros válidos del CSV")
 
     return weekly_data
+
 
 
 # ============================================================================
