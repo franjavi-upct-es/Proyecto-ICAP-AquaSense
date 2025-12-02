@@ -15,7 +15,7 @@ Parameters:
   ExistingRoleArn:
     Type: String
     Description: ARN del rol IAM de ejecución existente (LabRole)
-    Default: arn:aws:iam::123456789012:role/LabRole
+    Default: arn:aws:iam::<ID>:role/LabRole
 
 
 Resources:
@@ -28,6 +28,36 @@ Resources:
     Properties:
       ClusterName: proy-marmenor-cluster
 
+  ECSLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}'
+      InstanceType: t3.micro
+      IamInstanceProfile: LabInstanceProfile
+      SecurityGroups: 
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-PrivateFlaskSG"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config  
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 2
+      MaxSize: 5
+      DesiredCapacity: 3
+      VPCZoneIdentifier:
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-PrivateSubnet1Id"
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-PrivateSubnet2Id"
+      LaunchConfigurationName: !Ref ECSLaunchConfiguration
+      Tags:
+        - Key: Name
+          Value: proy-ECS-I
+          PropagateAtLaunch: true
 
 
 
@@ -39,10 +69,13 @@ Resources:
     Properties:
       Name: proy-marmenor-alb
       Subnets:
-        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet1Id"
-        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet2Id"
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-PublicSubnet1Id"
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-PublicSubnet2Id"
       SecurityGroups:
-        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
+        - Fn::ImportValue: 
+            !Sub "${NetworkStackName}-ALBSecurityGroup"
       Scheme: internet-facing
       Type: application
 
@@ -52,12 +85,23 @@ Resources:
   ECSTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: proy-tg
       VpcId:
-        Fn::ImportValue: !Sub "${NetworkStackName}-VPCId"
+        Fn::ImportValue: 
+          !Sub "${NetworkStackName}-VPCId"
       Port: 8080
       Protocol: HTTP
       TargetType: ip
       HealthCheckPath: /health
+      HealthCheckPort: '8080'
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+
 
   ###################################
   # Listener
@@ -73,59 +117,21 @@ Resources:
           TargetGroupArn: !Ref ECSTargetGroup
 
   ###################################
-  # EC2 Launch Template
-  ###################################
-  ECSLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: ecs-cluster-lt
-      LaunchTemplateData:
-        ImageId: ami-0dc2d3e4c0f9ebd18 
-        InstanceType: t3.micro
-        IamInstanceProfile:
-          Name: LabInstanceProfile
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            echo "ECS_CLUSTER=proy-marmenor-cluster" >> /etc/ecs/ecs.config
-            systemctl enable --now ecs
-
-
-  ###################################
-  # Auto Scaling Group
-  ###################################
-  ECSAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      MinSize: 1
-      MaxSize: 3
-      DesiredCapacity: 1
-      VPCZoneIdentifier:
-        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
-        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ECSLaunchTemplate
-        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
-
-
-  ###################################
   # Task 
   ###################################
   ECSTaskDefinitionEC2:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: aquasense-api-task-ec2
-      Cpu: 512
-      Memory: 1024
+      Cpu: 256
+      Memory: 256
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - EC2
       ExecutionRoleArn: !Ref ExistingRoleArn
       TaskRoleArn: !Ref ExistingRoleArn
       ContainerDefinitions:
-        - Name: aquasense-api
+        - Name: proy-aquasense-api
           Image: !Ref UriImage
           PortMappings:
             - ContainerPort: 8080
@@ -153,17 +159,20 @@ Resources:
     Properties:
       Cluster: !Ref ECSCluster
       LaunchType: EC2
-      DesiredCount: 2
+      DesiredCount: 3
       TaskDefinition: !Ref ECSTaskDefinitionEC2
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           Subnets:
-            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
-            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
+            - Fn::ImportValue: 
+                !Sub "${NetworkStackName}-PrivateSubnet1Id"
+            - Fn::ImportValue: 
+                !Sub "${NetworkStackName}-PrivateSubnet2Id"
           SecurityGroups:
-            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
+            - Fn::ImportValue: 
+                !Sub "${NetworkStackName}-PrivateFlaskSG"
       LoadBalancers:
-        - ContainerName: aquasense-api
+        - ContainerName: proy-aquasense-api
           ContainerPort: 8080
           TargetGroupArn: !Ref ECSTargetGroup
