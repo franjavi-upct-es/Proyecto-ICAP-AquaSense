@@ -8,6 +8,7 @@
 \setstretch{1.3}
 \usepackage{xcolor}
 \usepackage{graphicx}
+\usepackage{longtable}
 \usepackage{array}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \renewcommand*\contentsname{\color{black}Índice} 
@@ -20,6 +21,49 @@
 \tableofcontents
 \newpage
 \section{Cronograma}
+\begin{longtable}{|p{2.5cm}|p{8cm}|p{2.5cm}|p{2cm}|}
+\hline
+\textbf{Fecha} & \textbf{Tarea} & \textbf{Responsable} & \textbf{Duración} \\
+\hline
+\endhead
+
+% SEMANA 1
+11 de noviembre & \textbf{Inicio y Diseño de Arquitectura:} Definición de requisitos, análisis del dataset CSV y diseño de la arquitectura completa en AWS y endpoints de la API. & Todo el Equipo & 1 día \\
+\hline
+12-13 de noviembre & \textbf{Infraestructura de Red Base:} Creación de VPC, subnets, Security Groups, bucket S3 para datos crudos y tablas en DynamoDB. & Javier Moreno & 2 días \\
+\hline
+14-15 de noviembre & \textbf{Lógica de Negocio y Pipeline:} Desarrollo de funciones Lambda para procesamiento de CSV y cálculos estadísticos (maxdiff, temp mensual). & Pablo Meseguer & 2 días \\
+\hline
+16-17 de noviembre & \textbf{Configuración API Base:} Configuración del API Gateway y desarrollo de Lambdas para endpoints REST básicos (/sd, /temp). & Fco. Jav. Mercader & 2 días \\
+\hline
+
+% SEMANA 2
+18-19 de noviembre & \textbf{Seguridad y Automatización:} Configuración de roles IAM, políticas de seguridad y creación de plantillas CloudFormation base (IaC). & Javier Moreno & 2 días \\
+\hline
+20-21 de noviembre & \textbf{Sistema de Alarmas:} Configuración de SNS Topic, integración de alertas por desviación de datos y pruebas de envío de emails. & Pablo Meseguer & 2 días \\
+\hline
+22-24 de noviembre & \textbf{Integración y Pruebas:} Integración de todas las Lambdas con DynamoDB, manejo de errores en API y creación de suite de pruebas en Postman. & Fco. Jav. Mercader & 3 días \\
+\hline
+
+% SEMANA 3
+25-26 de noviembre & \textbf{Dockerización:} Creación de Dockerfile optimizado para la API, construcción de imagen y subida al repositorio ECR. & Pablo Meseguer & 2 días \\
+\hline
+27-28 de noviembre & \textbf{Infraestructura Avanzada (ECS):} Configuración de Application Load Balancer (ALB), Target Groups y creación del clúster ECS Fargate. & Javier Moreno & 2 días \\
+\hline
+29 de nov - 1 de dic & \textbf{Escalabilidad:} Configuración de Auto Scaling Groups, políticas de escalado basadas en métricas y ejecución de pruebas de carga. & Fco. Jav. Mercader & 3 días \\
+\hline
+
+% SEMANA 4
+2 de diciembre & \textbf{Documentación Técnica:} Redacción de la memoria técnica, diagramas finales de arquitectura y justificación de decisiones. & Javier Moreno & 1 día \\
+\hline
+3 de diciembre & \textbf{Manual de Replicación:} Elaboración de guía paso a paso para replicar el despliegue y scripts de limpieza de recursos. & Pablo Meseguer & 1 día \\
+\hline
+4 de diciembre & \textbf{Pruebas Finales y Despliegue:} Despliegue final limpio en cuentas AWS Academy y validación "End-to-End" de todo el flujo. & Todo el Equipo & 1 día \\
+\hline
+5 de diciembre & \textbf{Entrega Final:} Recopilación de entregables, preparación de material de defensa y envío del proyecto. & Todo el Equipo & 1 día \\
+\hline
+
+\end{longtable}
 \newpage
 \section{Diagrama Arquitectura de la solución}
 \begin{center}
@@ -69,6 +113,38 @@
                 Describe los contenedores que ejecutan la aplicación AquaSense, incluyendo la configuración de recursos (CPU, memoria) y el puerto utilizado (5000).
             \item \textbf{ECSService (AWS::ECS::Service):} Administra la ejecución de las tareas ECS, asegura la ejecución continua de un número deseado de tareas definidas en la configuración de tarea. En este caso, se garantiza que siempre haya dos tareas actibas para manejar las solicitudes entrantes. Se utiliza el modo de lanzamiento Fargate para simplificar la gestión de la infraestructura. El servicio monitorea las tareas y las reinicia automáticamente si fallan, garantizando alta disponibildiad y resiliencia para nuestra aplicación. 
         \end{itemize}
+    \item \textbf{Escalado automático}
+        \begin{itemize}[label=\textbullet]
+            \item \textbf{ECS Scalable Target (AWS::ApplicationAutoScaling::ScalableTarget):} Define el rango de capacidad del servicio ECS, asegurando que el número de tareas FARGATE activas esté entre un mínimo de 2 y máximo de 10. Este recurso actúa como el objetivo escalable que la política de escalado monitorea y ajusta según las métricas configuradas. Está asociado al recurso ECSService y permite mantener un nivel óptimo de disponibilidad y desempeño de nuestra aplicación.
+                
+            \item \textbf{Scaling Policy (AWS::ApplicationAutoScaling::ScalingPolicy)}
+                \begin{itemize}[label=$-$]
+                    \item \textbf{High CPU:} Implementa una política de escalado automático que aumenta la cantidad de tareas activas cuando la utilización promedio de CPU en el clúster ECS supera el 75\%. Esto asegura que la capacidad del servicio crezca dinámicamente para manejar un aumento en la carga de trabajo. Incluye un tiempo de enfriamiento (\textit{cooldown}) de 60 segundos para evitar ajustes excesivamente frecuentes.
+                    \item \textbf{Low CPU:} Establece una política de reducción de escala que disminuye el número de tareas activas cuando el uso de CPU cae por debajo del 25\%. Esto permite optimizar costos al liberar recursos durante periodos de baja demanda, manteniendo solo las tareas necesarias para sorportar la carga en ese momento. Similar a la política de escalado ascendente, aplica un enfriamiento de 60 segundos. 
+                \end{itemize}
+        \end{itemize}
+    \item \textbf{Seguridad}
+        \begin{itemize}[label=\textbullet]
+            \item \textbf{ALB Security Group (AWS::EC2::SecurityGroup):} Permite el acceso al balanceador de carga desde Internet (a través del puerto 80-HTTP), asegurando que el tráfico pueda alcanzar la aplicación.
+            \item \textbf{Task Security Group (AWS::EC2::SecurityGroup):} Permite el tráfico del ALB a las tareas de ECS (a través del puerto 5000), asegurando que las solicitudes lleguen al contenedor de la aplicación de manera distribuida y segura. 
+        \end{itemize}
+    \item \textbf{Gestión e implementación}
+        \begin{itemize}[label=\textbullet]
+            \item \textbf{CloudFormation:} Automatiza el despliegue de la infraestructura mediante plantillas asegurando la coherencia y la reproducibilidad en la implementación.
+            \item \textbf{AWS CLI:} Utilizada para el desarrollo de la imagen y autenticación de recursos a la hora de subir la imagen del contenedor de nuestra aplicación a AWS ECR.
+            \item \textbf{Docker:} Facilita el desarrollo y la contenedorización de la aplicación, asegurando un entorno de ejecución consistente.
+            \item \textbf{IAM Roles (AWS::IAM::Role):} Proporcionan los permisos necesarios para que las tareas de ECS accedan a DynamoDB y otros recursos de AWS. Permite que los distintos recursos de la arquitectura desplegada se puedan comunicar entre sí con seguridad. 
+        \end{itemize}
 \end{enumerate} 
 
+\section{Ejemplos de demostración de correcta funcionalidad}
+\begin{itemize}[label=\textbullet]
+    \item \textbf{Función Lambda:}
+    \item \textbf{ECR:}
+    \item \textbf{Automatización del aprovisionamiento de la infraestructura mediante CloudFormation:}
+    \item \textbf{Auto Escalado con métricas de utilización de recursos:}
+    \item \textbf{Funcionamiento de la aplicación:}
+
+        Distintas consultas que pueden realizar los analistas a través del servidor web desplegado por las tareas. En la propia URL definen el tipo de dato a consultar con su mes y año específico, además del correcto funcionamiento de la aplicación con el endpoint \textbf{\texttt{/health}}.
+\end{itemize}
 \end{document}
