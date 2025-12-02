@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script de configuraci??n e inicio de Docker para AquaSenseCloud API
 
-# --- 1. INSTALACI??N Y CONFIGURACI??N DE DOCKER ---
+# --- 1. INSTALACIA Y CONFIGURACI0N DE DOCKER ---
 yum update -y
 yum -y install docker
 systemctl start docker
@@ -11,13 +11,12 @@ usermod -a -G docker ec2-user
 # Esperar un momento para que Docker se inicialice (necesario en algunos entornos)
 sleep 5
 
-# Crear directorio de trabajo y moverse a ??l
+# Crear directorio de trabajo y moverse a el
 mkdir -p /app
 cd /app
 
-# --- 2. CREACI??N DE ARCHIVOS REQUERIDOS ---
 
-# 2.1. Crear requirements.txt
+# 2 Crear requirements.txt
 cat <<EOF > requirements.txt
 # Paquetes para AquaSenseCloud API
 # Python 3.11+
@@ -42,7 +41,7 @@ pytest==7.4.3
 requests==2.31.0
 EOF
 
-# 2.2. Crear Dockerfile
+# 3 Crear Dockerfile
 cat <<EOF > Dockerfile
 # Dockerfile para AquaSenseCloud API
 # Imagen optimizada para ECS Fargate
@@ -100,7 +99,7 @@ CMD [ "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", 
 
 EOF
 
-# 2.3. Crear aquasense.py (??C??DIGO PYTHON COMPLETO!)
+# 4 Crear aquasense.py 
 # Se usa 'PYTHONEOF' para asegurar que el contenido se escribe textualmente.
 cat <<'PYTHONEOF' > aquasense.py
 """
@@ -655,14 +654,14 @@ if __name__ == "__main__":
 
 PYTHONEOF
 
-# --- 3. CONSTRUCCI??N DE LA IMAGEN DOCKER ---
+# --- 5. CONSTRUCCI??N DE LA IMAGEN DOCKER ---
 docker build -t aquasense-api .
 
-# --- 4. EJECUCI??N DEL CONTENEDOR DOCKER ---
+# --- 6. EJECUCI??N DEL CONTENEDOR DOCKER ---
 # Estas variables se inyectar??n desde CloudFormation a la EC2, y luego 
 # se pasan al contenedor.
-DDB_TABLE_NAME="${DYNAMODB_TABLE_NAME}" # Usar?? el valor del !Sub en CloudFormation
-AWS_REGION="${AWS_REGION}"             # Usar?? el valor del !Sub en CloudFormation
+DDB_TABLE_NAME="${DYNAMODB_TABLE_NAME}" 
+AWS_REGION="${AWS_REGION}"             
 
 # docker run -d \
 #   --name aquasense-web \
@@ -674,7 +673,6 @@ AWS_REGION="${AWS_REGION}"             # Usar?? el valor del !Sub en CloudFormat
 export AWS_DEFAULT_REGION="us-east-1"
 export REGION=$AWS_DEFAULT_REGION
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-# REGION=$(aws configure get region)
 aws ecr create-repository --repository-name aquasense-api
 
 aws ecr get-login-password --region $REGION \
