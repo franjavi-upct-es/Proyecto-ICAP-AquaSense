@@ -1,101 +1,483 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  Application Template: Crea la inftaestructura basica. El bucket , la VPC la taba DB y...
+  Application Template: Crea la infraestructura básica (DB, S3, VPC, SNS) e integra la función Lambda.
 
-##################3
-##Metadata
-##################3
+##################
+## Metadata
+##################
 
 Metadata:
-  Licensce: Apache-2.0
+  License: Apache-2.0
 
 ######################
 # Parameters section
 ######################
 
 Parameters:
-# Table:
+  # Table:
   HashKeyElementName:
-    Type: String  
-    AllowedPattern: '[a-zA-z0-9]*'
+    Type: String    
+    AllowedPattern: '[a-zA-Z0-9]*'
     MinLength: "1"
     MaxLength: "2048"
     ConstraintDescription: must contain only alphanumeric characters
+    Default: monthYear
 
-  HashKeyElementType:
-    Description: HashType Primarykey Type
+  Email:
     Type: String
-    Default: S
-    AllowedValues: '[S|N]' # AllowedPattern
-    MinLength: "1"
-    MaxLength: "1"
-    ConstraintDescription: must be either S or Name
+    ConstraintDescription: email para el sns
+    Default:  javier.moreno@edu.upct.es  
 
-  ReadCapacityUnits:
-    Description: Provisioned read throughput
-    Type: Number
-    Default: "5"
-    MinValue: "5"
-    MaxValue: "10000"
-    ConstraintDescription: must be between 5 and 10000
+    
 
-  WriteCapacityUnits:
-    Description: Provisioned write throughput
-    Type: Number
-    Default: "10"
-    MinValue: "5"
-    MaxValue: "10000"
-    ConstraintDescription: must be between 5 and 10000
+  LambdaCodeBucket:
+    Type: String
+    Description: Nombre del bucket S3 que contiene el código ZIP de la Lambda.
+    Default: codebucket-21
+  
+  LambdaCodeKey:
+    Type: String
+    Description: Clave (ruta) del archivo ZIP de la Lambda dentro del bucket.
+    Default: lambda.zip
+  
+  ExistingRoleArn:
+    Type: String
+    Description: ARN del rol IAM de ejecución existente (LabRole).
 
+    Default: arn:aws:iam::123456789012:role/LabRole
+  
+  # AMI
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 
 ######################
 # Resources section
 ######################
 
-
 Resources:
+  ####################
+  # Lambda Function
+  ##################
+  ProcessS3FileLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: proy-marmenor-process-csv
+      Runtime: python3.11 
+      Handler: lambda.lambda_handler
+      Role: !Ref ExistingRoleArn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket # Usa el nuevo parámetro
+        S3Key: !Ref LambdaCodeKey # Usa el nuevo parámetro
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref MarMenorAlertsTopic
+          DDB_TABLE_NAME: !Ref myDynamoDBTable
   ################
-  #DynamoDBTTABLE
-  ##############3
+  # DynamoDB TABLE
+  ################
   myDynamoDBTable:
-
     Type: AWS::DynamoDB::Table
     Properties:
-
       AttributeDefinitions:
         - AttributeName: !Ref HashKeyElementName
-          AttributeType: !Ref HashKeyElementType
-
+          AttributeType: S # !Ref HashKeyElementType
+        - AttributeName: metric_type
+          AttributeType: S
       KeySchema:
         - AttributeName: !Ref HashKeyElementName
           KeyType: HASH
-
+        - AttributeName: metric_type
+          KeyType: RANGE
       ProvisionedThroughput:
-        ReadCapacityUnits: !Ref ReadCapacityUnits
-        WriteCapacityUnits: !Ref WriteCapacityUnits
-
+        ReadCapacityUnits: 20 #!Ref ReadCapacityUnits
+        WriteCapacityUnits: 20 #!Ref WriteCapacityUnits
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-    
       TableName: Measures
 
   #########
   # Bucket
-  ########
+  #########
   S3Bucket:
-    Type: 'AWS::S3::Bucket'
+    Type: AWS::S3::Bucket
     Properties:
       BucketName: proy-marmenor-csv-raw
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:Put
+            Function: !GetAtt ProcessS3FileLambda.Arn # Referencia la nueva Lambda
 
+  #########################
+  # Permiso de invocación
+  #########################
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessS3FileLambda # Referencia la nueva Lambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:s3:::proy-marmenor-csv-raw
+
+  ########################
+  # SNS
+  #######################
+  MarMenorAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: proy-marmenor-alerts
+      DisplayName: "Alerta Mar Menor"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref Email
+      Tags:
+        - Key: Proyecto
+          Value: AquaSenseCloud
+        - Key: Entorno
+          Value: Producción
+
+
+  #####################
+  #VPC (Mantenido sin cambios)
+  ####################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 192.168.0.0/16
+      Tags:
+        - Key: Name
+          Value: proy-marmenor-vpc
+
+  ## Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+    
+  # NAT Gateway y Elastic IP
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: proy-Nat-eip
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub proy-nat-gateway
+
+  ## Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: proy-Public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  
+  PrivateRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          - Key: Name
+            Value: proy-Private-rt
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  ## Public Subnet
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.0.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: proy-PublicSubnet1
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # segunda public subnet
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.3.0/24
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: proy-PublicSubnet2
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  
+  # privates subnets:
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.1.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: proy-PrivateSubnet1
+  
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.2.0/24
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: proy-PrivateSubnet2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  ## SecurityGroup
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Grupo de seguridad para el balanceador de carga
+      GroupName: proy-alb-sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress: # reglas de entrada
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP 
+      SecurityGroupEgress: #  trafico de salida
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: proy-alb-sg
+
+  PrivateFlaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Grupo de seguridad para las instancias
+      GroupName: proy-instances-sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress: # reglas de entrada
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Trafico entre instancias y el balanceador
+      SecurityGroupEgress: #  trafico de salida
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: proy-instances-sg
+
+    # Grupo de seguridad temporal para la DockerInstance (SSH y testeo local)
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: InstanceSecurityGroup
+      GroupDescription: Acceso SSH y testeo Flask
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+    
+
+  ## Instances:
+  DokerInstace:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Ref AmazonLinuxAMIID
+      KeyName: proy-marmenor
+      IamInstanceProfile: "LabInstanceProfile"
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref InstanceSecurityGroup
+          AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          DeleteOnTermination: true
+          SubnetId: !Ref PublicSubnet1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Exportar las variables de CloudFormation al entorno de la EC2
+          export DYNAMODB_TABLE_NAME="${myDynamoDBTable}"
+          export AWS_REGION="${AWS::Region}"
+          # Instalar AWS CLI y descargar el script
+          yum install -y aws-cli
+          aws s3 cp s3://${LambdaCodeBucket}/docker_setup.sh /tmp/docker_setup.sh --region ${AWS::Region}
+          
+          # Hacer el script ejecutable y ejecutarlo
+          chmod +x /tmp/docker_setup.sh
+          /tmp/docker_setup.sh
+      InstanceInitiatedShutdownBehavior: terminate
+      Tags:
+        - Key: Name
+          Value: DockerInstance
+
+  DiskVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 100
+      AvailabilityZone: !GetAtt DokerInstace.AvailabilityZone
+      Tags:
+        - Key: Name
+          Value: WebData
+    DeletionPolicy: Snapshot
+
+  DiskMountPoint:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref DokerInstace
+      VolumeId: !Ref DiskVolume
+      Device: /dev/sdh
+
+
+
+
+
+######################
+# Outputs section
+######################
 Outputs:
   TableName:
-    Description: La Tabla Measures se ha creado correctamente
+    Description: La tabla Measures se ha creado correctamente
     Value: !Ref myDynamoDBTable
   BucketName:
-    Description: El Bucket proy-marmenor-csv-raw de S3 ha sido creado correctamente
+    Description: El bucket proy-marmenor-csv-raw de S3 ha sido creado correctamente
     Value: !Ref S3Bucket
+  LambdaFunctionName:
+    Description: El nombre de la función Lambda creada.
+    Value: !Ref ProcessS3FileLambda
+  LambdaFunctionArn:
+    Description: El ARN de la función Lambda creada.
+    Value: !GetAtt ProcessS3FileLambda.Arn
+  VPCName:
+    Description: La VPC proy-marmenor-vpcd ha sido creada correctamente
+    Value: !Ref VPC
+  PublicSubnetName1:
+    Description: La subnet pública 1 ha sido creado correctamente
+    Value: !Ref PublicSubnet1
+  PublicSubnetName2:
+    Description: La subnet pública 2 ha sido creado correctamente
+    Value: !Ref PublicSubnet2
+  PrivateubnetName1:
+    Description: La subnet privada 1 ha sido creado correctamente
+    Value: !Ref PrivateSubnet1
+  PrivateSubnetName2:
+    Description: La subnet privada 2 ha sido creado correctamente
+    Value: !Ref PrivateSubnet2
+  DokerInstaceName:
+    Description: La instancia de la subred pública
+    Value: !Ref DokerInstace
 
+  VPCId:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
 
+  PublicSubnet1Id:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Id"
 
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2Id"
+
+  PrivateSubnet1Id:
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1Id"
+
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2Id"
+
+  PrivateFlaskSecurityGroupId:
+    Value: !Ref PrivateFlaskSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateFlaskSG"
+
+  ALBSecurityGroupId:
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBSecurityGroup"
+
+  DynamoDBTableName:
+    Value: !Ref myDynamoDBTable
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTable"
 
