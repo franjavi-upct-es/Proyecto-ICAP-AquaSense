@@ -52,8 +52,8 @@ dynamodb = boto3.resource(
 table_name = os.environ.get("DYNAMODB_TABLE", "proy-MarMenorData")
 table = dynamodb.Table(table_name)
 
-logger.info(f"🚀 AquaSenseCloud API iniciada")
-logger.info(f"📊 DynamoDB Table: {table_name}")
+logger.info(f"AquaSenseCloud API iniciada")
+logger.info(f"DynamoDB Table: {table_name}")
 
 # =======================================
 # FUNCIONES AUXILIARES
@@ -221,7 +221,7 @@ def health_check():
         # Verificar conectividad con DynamoDB
         table.table_status
 
-        logger.info("✅ Health check: OK")
+        logger.info("Health check: OK")
 
         return jsonify(
             {
@@ -233,7 +233,7 @@ def health_check():
         ), 200
 
     except Exception as e:
-        logger.error(f"❌ Health check failed: {str(e)}")
+        logger.error(f"Health check failed: {str(e)}")
 
         return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
@@ -268,7 +268,7 @@ def get_maxdiff():
         # Contruir clave de búsqueda
         month_year = f"{year}-{month:02d}"
 
-        logger.info(f"📊 Consultando maxdiff: {month_year}")
+        logger.info(f"Consultando maxdiff: {month_year}")
 
         # Consultar DynamoDB
         response = table.get_item(
@@ -277,7 +277,7 @@ def get_maxdiff():
 
         # Verificar si existe el registro
         if "Item" not in response:
-            logger.warning(f"⚠️ No hay datos para {month_year}")
+            logger.warning(f"No hay datos para {month_year}")
             return jsonify(
                 {
                     "error": "Datos no encontrados",
@@ -299,12 +299,12 @@ def get_maxdiff():
             "record_count": item.get("record_count"),
         }
 
-        logger.info(f"✅ Maxdiff {month_year}: {item['value']}")
+        logger.info(f"Maxdiff {month_year}: {item['value']}")
 
         return jsonify(result), 200
 
     except Exception as e:
-        logger.error(f"❌ Error en /maxdiff: {str(e)}")
+        logger.error(f"Error en /maxdiff: {str(e)}")
         return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
 
 
@@ -343,7 +343,7 @@ def get_sd():
 
         # Verificar si existe el registro
         if "Item" not in response:
-            logger.warning(f"⚠️ No hay datos para {month_year}")
+            logger.warning(f"No hay datos para {month_year}")
             return jsonify(
                 {
                     "error": "Datos no encontrados",
@@ -364,12 +364,12 @@ def get_sd():
             "record_count": item.get("record_count"),
         }
 
-        logger.info(f"✅ SD {month_year}: {item['value']}")
+        logger.info(f"SD {month_year}: {item['value']}")
 
         return jsonify(result), 200
 
     except Exception as e:
-        logger.error(f"❌ Error en /sd: {str(e)}")
+        logger.error(f"Error en /sd: {str(e)}")
         return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
 
 
@@ -402,14 +402,14 @@ def get_temp():
         # Construir clave de búsqueda
         month_year = f"{year}-{month:02d}"
 
-        logger.info(f"📊 Consultando temp: {month_year}")
+        logger.info(f"Consultando temp: {month_year}")
 
         # Consultar DynamoDB
         response = table.get_item(Key={"month_year": month_year, "metric_type": "temp"})
 
         # Verificar si existe el registro
         if "Item" not in response:
-            logger.warning(f"⚠️ No hay datos para {month_year}")
+            logger.warning(f"No hay datos para {month_year}")
             return jsonify(
                 {
                     "error": "Datos no encontrados",
@@ -431,12 +431,12 @@ def get_temp():
             "record_count": item.get("record_count"),
         }
 
-        logger.info(f"✅ Temp {month_year}: {item['value']}")
+        logger.info(f"Temp {month_year}: {item['value']}")
 
         return jsonify(result), 200
 
     except Exception as e:
-        logger.error(f"❌ Error en /temp: {str(e)}")
+        logger.error(f"Error en /temp: {str(e)}")
         return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
 
 
@@ -458,7 +458,7 @@ def get_available_months():
     }
     """
     try:
-        logger.info("📊 Listando meses disponibles")
+        logger.info("Listando meses disponibles")
 
         # Escanear tabla (apropiado para datasets pequeños)
         response = table.scan()
@@ -478,12 +478,12 @@ def get_available_months():
         # Convertir a lista y ordenar
         months_list = sorted(months_dict.values(), key=lambda x: x["month_year"])
 
-        logger.info("✅ Total meses: {len(months_list)}")
+        logger.info("Total meses: {len(months_list)}")
 
         return jsonify({"months": months_list, "count": len(months_list)}), 200
 
     except Exception as e:
-        logger.error(f"❌ Error en /months: {str(e)}")
+        logger.error(f"Error en /months: {str(e)}")
         return jsonify({"error": "Error interno del servidor", "message": str(e)}), 500
 
 
@@ -495,7 +495,7 @@ def get_available_months():
 @app.errorhandler(404)
 def not_found(error):
     """Manejo de error 404 - Endpoint no encontrado"""
-    logger.warning(f"⚠️ Endpoint no encontrado: {request.path}")
+    logger.warning(f"Endpoint no encontrado: {request.path}")
     return jsonify(
         {
             "error": "Endpoint no encontrado",
@@ -515,7 +515,7 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Majeo de error 500 - Error interno"""
-    logger.error(f"❌ Error interno del servidor: {str(error)}")
+    logger.error(f"Error interno del servidor: {str(error)}")
     return jsonify(
         {
             "error": "Error interno del servidor",
@@ -540,10 +540,10 @@ if __name__ == "__main__":
     debug = os.environ.get("DEBUG", "False").lower() == "true"
 
     logger.info("=" * 70)
-    logger.info(f"🚀 Iniciando AquaSenseCloud API")
-    logger.info(f"   Puerto: {port}")
-    logger.info(f"   Debug: {debug}")
-    logger.info(f"   DynamoDB Table: {table_name}")
+    logger.info(f"Iniciando AquaSenseCloud API")
+    logger.info(f"\tPuerto: {port}")
+    logger.info(f"\tDebug: {debug}")
+    logger.info(f"\tDynamoDB Table: {table_name}")
     logger.info("=" * 70)
 
     app.run(host="0.0.0.0", port=port, debug=debug)
