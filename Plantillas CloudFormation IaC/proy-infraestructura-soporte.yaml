@@ -76,6 +76,7 @@ Resources:
         Variables:
           SNS_TOPIC_ARN: !Ref MarMenorAlertsTopic
           DDB_TABLE_NAME: !Ref myDynamoDBTable
+          
   ################
   # DynamoDB TABLE
   ################
@@ -338,7 +339,7 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: InstanceSecurityGroup
+      GroupName: proy-instanceSecurityGroup
       GroupDescription: Acceso SSH y testeo Flask
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -383,24 +384,24 @@ Resources:
       InstanceInitiatedShutdownBehavior: terminate
       Tags:
         - Key: Name
-          Value: DockerInstance
+          Value: proy-DockerInstance
 
-  DiskVolume:
-    Type: AWS::EC2::Volume
-    Properties:
-      Size: 100
-      AvailabilityZone: !GetAtt DokerInstace.AvailabilityZone
-      Tags:
-        - Key: Name
-          Value: WebData
-    DeletionPolicy: Snapshot
+  # DiskVolume:
+  #   Type: AWS::EC2::Volume
+  #   Properties:
+  #     Size: 100
+  #     AvailabilityZone: !GetAtt DokerInstace.AvailabilityZone
+  #     Tags:
+  #       - Key: Name
+  #         Value: WebData
+  #   DeletionPolicy: Snapshot
 
-  DiskMountPoint:
-    Type: AWS::EC2::VolumeAttachment
-    Properties:
-      InstanceId: !Ref DokerInstace
-      VolumeId: !Ref DiskVolume
-      Device: /dev/sdh
+  # DiskMountPoint:
+  #   Type: AWS::EC2::VolumeAttachment
+  #   Properties:
+  #     InstanceId: !Ref DokerInstace
+  #     VolumeId: !Ref DiskVolume
+  #     Device: /dev/sdh
 
 
 
