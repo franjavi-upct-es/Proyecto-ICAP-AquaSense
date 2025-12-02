@@ -8,7 +8,7 @@ systemctl start docker
 systemctl enable docker
 usermod -a -G docker ec2-user
 
-# Esperar un momento para que Docker se inicialice (necesario en algunos entornos)
+# Esperar un momento para que Docker se inicialice
 sleep 5
 
 # Crear directorio de trabajo y moverse a el
