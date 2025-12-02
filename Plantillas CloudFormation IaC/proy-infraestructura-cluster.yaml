@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Plantilla que crea la infraestructura ECS EC2 con awsvpc
+
+Parameters:
+  UriImage:
+    Description: URI de la imagen del repositorio
+    Type: String
+    Default: <ID>.dkr.ecr.<Region>.amazonaws.com/aquasense-api:latest"
+
+  NetworkStackName:
+    Description: Nombre de la pila de infraestructura base
+    Type: String
+    Default: proy-infraestructura-soporte
+
+  ExistingRoleArn:
+    Type: String
+    Description: ARN del rol IAM de ejecución existente (LabRole)
+    Default: arn:aws:iam::123456789012:role/LabRole
+
+
+Resources:
+
+  ###################
+  # ECS Cluster
+  ###################
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: proy-marmenor-cluster
+
+
+
+
+  ###################################
+  # Load Balancer
+  ###################################
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: proy-marmenor-alb
+      Subnets:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet1Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet2Id"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
+      Scheme: internet-facing
+      Type: application
+
+  ###################################
+  # Target Group
+  ###################################
+  ECSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCId"
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+
+  ###################################
+  # Listener
+  ###################################
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTargetGroup
+
+  ###################################
+  # EC2 Launch Template
+  ###################################
+  ECSLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ecs-cluster-lt
+      LaunchTemplateData:
+        ImageId: ami-0dc2d3e4c0f9ebd18 
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Name: LabInstanceProfile
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "ECS_CLUSTER=proy-marmenor-cluster" >> /etc/ecs/ecs.config
+            systemctl enable --now ecs
+
+
+  ###################################
+  # Auto Scaling Group
+  ###################################
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ECSLaunchTemplate
+        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
+
+
+  ###################################
+  # Task 
+  ###################################
+  ECSTaskDefinitionEC2:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: aquasense-api-task-ec2
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - EC2
+      ExecutionRoleArn: !Ref ExistingRoleArn
+      TaskRoleArn: !Ref ExistingRoleArn
+      ContainerDefinitions:
+        - Name: aquasense-api
+          Image: !Ref UriImage
+          PortMappings:
+            - ContainerPort: 8080
+          Environment:
+            - Name: DYNAMODB_TABLE
+              Value:
+                Fn::ImportValue: !Sub "${NetworkStackName}-DynamoDBTable"
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          HealthCheck:
+            Command: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+            Interval: 30
+            Timeout: 10
+            Retries: 5
+            StartPeriod: 60
+
+
+  ###################################
+  # ECS Service 
+  ###################################
+  ECSServiceEC2:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      LaunchType: EC2
+      DesiredCount: 2
+      TaskDefinition: !Ref ECSTaskDefinitionEC2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
+      LoadBalancers:
+        - ContainerName: aquasense-api
+          ContainerPort: 8080
+          TargetGroupArn: !Ref ECSTargetGroup
