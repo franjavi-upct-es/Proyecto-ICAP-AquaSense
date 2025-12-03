@@ -351,7 +351,7 @@ def get_previous_month_max_temp(current_year, current_month):
         # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
         response = table.get_item(
             Key={
-                'month_year': prev_key,
+                'monthYear': prev_key,
                 'metric_type': 'temp'
             }
         )
@@ -383,7 +383,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
     Returns:
         Lista de diccionarios con métricas mensuales
             [{
-                'month_year': str,
+                'monthYear': str,
                 'max_deviation': float,
                 'avg_temperature': float,
                 'max_temperature': float,
@@ -397,8 +397,8 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
     monthly_groups = defaultdict(list)
 
     for record in weekly_data:
-        month_year = f"{record['year']}-{record['month']:02d}"
-        monthly_groups[month_year].append(record)
+        monthYear = f"{record['year']}-{record['month']:02d}"
+        monthly_groups[monthYear].append(record)
 
     # 2. Ordenar meses cronológicamente (importante para calcular las diferencias)
     sorted_months = sorted(monthly_groups.keys())
@@ -409,8 +409,8 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
     monthly_metrics = []
     previous_max_temp = None
 
-    for month_year in sorted_months:
-        records = monthly_groups[month_year]
+    for monthYear in sorted_months:
+        records = monthly_groups[monthYear]
 
         # Calcular métricas del mes
         max_deviation = max(r["desviacion"] for r in records)
@@ -434,7 +434,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
 
         monthly_metrics.append(
             {
-                "month_year": month_year,
+                "monthYear": monthYear,
                 "max_deviation": max_deviation,
                 "avg_temperature": avg_temperature,
                 "max_temperature": max_temperature,
@@ -444,7 +444,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
         )
 
         # Logging detallado
-        print(f"• {month_year}")
+        print(f"• {monthYear}")
         print(f"\t- Max desviación: {max_deviation:.4f}ºC")
         print(f"\t- Temp media:     {avg_temperature:.2f}ºC")
         print(f"\t- Temp máxima:    {max_temperature:.2f}ºC")
@@ -469,7 +469,7 @@ def store_in_dynamodb(monthly_metrics: list):
     Alamacena las métricas mensuales en DynamoDB
 
     Estructura de la tabla:
-        - PK: month_year (ej: "2017-03")
+        - PK: monthYear (ej: "2017-03")
         - SK: metric_type (ej: "temp", "sd", "maxdiff")
         - Atributos: value, max_temp, last_updated, record_count
 
@@ -482,7 +482,7 @@ def store_in_dynamodb(monthly_metrics: list):
     total_updates = 0
 
     for metrics in monthly_metrics:
-        month_year = metrics["month_year"]
+        monthYear = metrics["monthYear"]
 
         # Convertir floats a Decimal (requerido por DynamoDB)
         max_dev_decimal = Decimal(str(metrics["max_deviation"]))
@@ -494,7 +494,7 @@ def store_in_dynamodb(monthly_metrics: list):
             # 1. Almacenar máxiam desviación (sd = standard deviation)
             table.put_item(
                 Item={
-                    "month_year": month_year,
+                    "monthYear": monthYear,
                     "metric_type": "sd",
                     "value": max_dev_decimal,
                     "last_updated": timestamp,
@@ -505,7 +505,7 @@ def store_in_dynamodb(monthly_metrics: list):
             # 2. Almacenar temperatura media mensaul (temp)
             table.put_item(
                 Item={
-                    "month_year": month_year,
+                    "monthYear": monthYear,
                     "metric_type": "temp",
                     "value": avg_temp_decimal,
                     "max_temp": max_temp_decimal,
@@ -517,7 +517,7 @@ def store_in_dynamodb(monthly_metrics: list):
             # 3. Almacenar diferencia de máxima temperatura (maxdiff)
             table.put_item(
                 Item={
-                    "month_year": month_year,
+                    "monthYear": monthYear,
                     "metric_type": "maxdiff",
                     "value": temp_diff_decimal,
                     "max_temp": max_temp_decimal,
@@ -527,10 +527,10 @@ def store_in_dynamodb(monthly_metrics: list):
             )
 
             total_updates += 3
-            print(f"{month_year}: 3 métricas almacenadas")
+            print(f"{monthYear}: 3 métricas almacenadas")
 
         except Exception as e:
-            print(f"ERROR almacenando {month_year}: {str(e)}")
+            print(f"ERROR almacenando {monthYear}: {str(e)}")
 
     print(f"Total actualizaciones en DynamoDB: {total_updates}")
 
