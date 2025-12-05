@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Application Template: Crea la lambda y el bucket s3.
+
+Parameters:
+  Email:
+    Type: String
+    ConstraintDescription: email para el sns
+    Default: javier.moreno@edu.upct.es  
+
+  NetworkStackName:
+    Description: Nombre de la pila de infraestructura base
+    Type: String
+    Default: proy-infraestructura-soporte
+
+
+  
+ 
+Resources: 
+ ####################
+  # Lambda Function
+  ##################
+  ProcessS3FileLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: proy-marmenor-process-csv
+      Runtime: python3.11 
+      Handler: funcion_lambda.lambda_handler
+      Role:
+       Fn::ImportValue: 
+          !Sub "${NetworkStackName}-ARNLabrol"
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Sub "proy-marmenor-codebucket-${AWS::AccountId}" 
+        S3Key: lambda.zip 
+      Environment:
+        Variables: #  Variables de entorno
+          SNS_TOPIC_ARN: !Ref MarMenorAlertsTopic
+          DYNAMODB_TABLE:
+           Fn::ImportValue: 
+              !Sub "${NetworkStackName}-DynamoDBTable"
+  #########
+  # Bucket
+  #########
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "proy-marmenor-csv-raw-${AWS::AccountId}"
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:Put
+            Function: !GetAtt ProcessS3FileLambda.Arn # Referencia la nueva Lambda
+
+
+ #########################
+  # Permiso de invocación
+  #########################
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessS3FileLambda # Referencia la nueva Lambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:s3:::proy-marmenor-csv-raw-${AWS::AccountId}
+
+
+  ########################
+  # SNS
+  #######################
+  MarMenorAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: proy-marmenor-alerts
+      DisplayName: "Alerta Mar Menor"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref Email
+      Tags:
+        - Key: Proyecto
+          Value: AquaSenseCloud
+        - Key: Entorno
+          Value: Producción
+
+
+Outputs:
+  LambdaFunctionName:
+    Description: El nombre de la función Lambda creada.
+    Value: !Ref ProcessS3FileLambda
+  
+  
