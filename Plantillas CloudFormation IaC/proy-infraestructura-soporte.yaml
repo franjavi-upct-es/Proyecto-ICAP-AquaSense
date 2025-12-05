@@ -14,32 +14,7 @@ Metadata:
 ######################
 
 Parameters:
-  # Table:
-  HashKeyElementName:
-    Type: String    
-    AllowedPattern: '[a-zA-Z0-9]*'
-    MinLength: "1"
-    MaxLength: "2048"
-    ConstraintDescription: must contain only alphanumeric characters
-    Default: monthYear
 
-  Email:
-    Type: String
-    ConstraintDescription: email para el sns
-    Default:  javier.moreno@edu.upct.es  
-
-    
-
-  LambdaCodeBucket:
-    Type: String
-    Description: Nombre del bucket S3 que contiene el código ZIP de la Lambda.
-    Default: codebucket-21
-  
-  LambdaCodeKey:
-    Type: String
-    Description: Clave (ruta) del archivo ZIP de la Lambda dentro del bucket.
-    Default: lambda.zip
-  
   ExistingRoleArn:
     Type: String
     Description: ARN del rol IAM de ejecución existente (LabRole).
@@ -57,45 +32,26 @@ Parameters:
 ######################
 
 Resources:
-  ####################
-  # Lambda Function
-  ##################
-  ProcessS3FileLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: proy-marmenor-process-csv
-      Runtime: python3.11 
-      Handler: lambda.lambda_handler
-      Role: !Ref ExistingRoleArn
-      Timeout: 60
-      MemorySize: 256
-      Code:
-        S3Bucket: !Ref LambdaCodeBucket # Usa el nuevo parámetro
-        S3Key: !Ref LambdaCodeKey # Usa el nuevo parámetro
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref MarMenorAlertsTopic
-          DDB_TABLE_NAME: !Ref myDynamoDBTable
-          
   ################
   # DynamoDB TABLE
   ################
+
   myDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: !Ref HashKeyElementName
-          AttributeType: S # !Ref HashKeyElementType
+        - AttributeName: monthYear
+          AttributeType: S 
         - AttributeName: metric_type
           AttributeType: S
       KeySchema:
-        - AttributeName: !Ref HashKeyElementName
+        - AttributeName: monthYear
           KeyType: HASH
         - AttributeName: metric_type
           KeyType: RANGE
       ProvisionedThroughput:
         ReadCapacityUnits: 20 #!Ref ReadCapacityUnits
-        WriteCapacityUnits: 20 #!Ref WriteCapacityUnits
+        WriteCapacityUnits: 20 
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       TableName: Measures
@@ -106,43 +62,11 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: proy-marmenor-csv-raw
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:Put
-            Function: !GetAtt ProcessS3FileLambda.Arn # Referencia la nueva Lambda
-
-  #########################
-  # Permiso de invocación
-  #########################
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ProcessS3FileLambda # Referencia la nueva Lambda
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !Sub arn:${AWS::Partition}:s3:::proy-marmenor-csv-raw
-
-  ########################
-  # SNS
-  #######################
-  MarMenorAlertsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: proy-marmenor-alerts
-      DisplayName: "Alerta Mar Menor"
-      Subscription:
-        - Protocol: email
-          Endpoint: !Ref Email
-      Tags:
-        - Key: Proyecto
-          Value: AquaSenseCloud
-        - Key: Entorno
-          Value: Producción
+      BucketName: !Sub "proy-marmenor-codebucket-${AWS::AccountId}"
 
 
   #####################
-  #VPC (Mantenido sin cambios)
+  #VPC 
   ####################
   VPC:
     Type: AWS::EC2::VPC
@@ -356,6 +280,7 @@ Resources:
   ## Instances:
   DokerInstace:
     Type: AWS::EC2::Instance
+    DependsOn: S3Bucket
     Properties:
       InstanceType: t3.micro
       ImageId: !Ref AmazonLinuxAMIID
@@ -376,7 +301,7 @@ Resources:
           export AWS_REGION="${AWS::Region}"
           # Instalar AWS CLI y descargar el script
           yum install -y aws-cli
-          aws s3 cp s3://${LambdaCodeBucket}/docker_setup.sh /tmp/docker_setup.sh --region ${AWS::Region}
+          wget -O /tmp/docker_setup.sh https://raw.githubusercontent.com/franjavi-upct-es/Proyecto-ICAP-AquaSense/main/Plantillas%20CloudFormation%20IaC/docker_setup.sh
           
           # Hacer el script ejecutable y ejecutarlo
           chmod +x /tmp/docker_setup.sh
@@ -386,61 +311,12 @@ Resources:
         - Key: Name
           Value: proy-DockerInstance
 
-  # DiskVolume:
-  #   Type: AWS::EC2::Volume
-  #   Properties:
-  #     Size: 100
-  #     AvailabilityZone: !GetAtt DokerInstace.AvailabilityZone
-  #     Tags:
-  #       - Key: Name
-  #         Value: WebData
-  #   DeletionPolicy: Snapshot
-
-  # DiskMountPoint:
-  #   Type: AWS::EC2::VolumeAttachment
-  #   Properties:
-  #     InstanceId: !Ref DokerInstace
-  #     VolumeId: !Ref DiskVolume
-  #     Device: /dev/sdh
-
-
-
 
 
 ######################
 # Outputs section
 ######################
 Outputs:
-  TableName:
-    Description: La tabla Measures se ha creado correctamente
-    Value: !Ref myDynamoDBTable
-  BucketName:
-    Description: El bucket proy-marmenor-csv-raw de S3 ha sido creado correctamente
-    Value: !Ref S3Bucket
-  LambdaFunctionName:
-    Description: El nombre de la función Lambda creada.
-    Value: !Ref ProcessS3FileLambda
-  LambdaFunctionArn:
-    Description: El ARN de la función Lambda creada.
-    Value: !GetAtt ProcessS3FileLambda.Arn
-  VPCName:
-    Description: La VPC proy-marmenor-vpcd ha sido creada correctamente
-    Value: !Ref VPC
-  PublicSubnetName1:
-    Description: La subnet pública 1 ha sido creado correctamente
-    Value: !Ref PublicSubnet1
-  PublicSubnetName2:
-    Description: La subnet pública 2 ha sido creado correctamente
-    Value: !Ref PublicSubnet2
-  PrivateubnetName1:
-    Description: La subnet privada 1 ha sido creado correctamente
-    Value: !Ref PrivateSubnet1
-  PrivateSubnetName2:
-    Description: La subnet privada 2 ha sido creado correctamente
-    Value: !Ref PrivateSubnet2
-  DokerInstaceName:
-    Description: La instancia de la subred pública
-    Value: !Ref DokerInstace
 
   VPCId:
     Value: !Ref VPC
@@ -482,3 +358,7 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DynamoDBTable"
 
+  ARNLabrol:
+    Value: !Ref ExistingRoleArn
+    Export:
+      Name: !Sub "${AWS::StackName}-ARNLabrol"
