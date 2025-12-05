@@ -8,8 +8,25 @@ systemctl start docker
 systemctl enable docker
 usermod -a -G docker ec2-user
 
-# Esperar un momento para que Docker se inicialice
+# Esperar un momento para que Docker se inicialice (necesario en algunos entornos)
 sleep 5
+
+#   Variables
+export AWS_DEFAULT_REGION="us-east-1"
+export REGION=$AWS_DEFAULT_REGION
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+BUCKET=$(aws s3api list-buckets \
+  --query "Buckets[?starts_with(Name, 'proy-marmenor-codebucket-$ACCOUNT_ID')].Name" \
+  --output text)
+
+# Descarga la lambda y la comprimo:
+wget https://raw.githubusercontent.com/franjavi-upct-es/Proyecto-ICAP-AquaSense/main/Ingesta%20Datos%20y%20Pipeline/funcion_lambda.py
+
+
+zip lambda.zip funcion_lambda.py
+
+# Subir la lambda al bucket
+aws s3 cp lambda.zip s3://$BUCKET/lambda.zip
 
 # Crear directorio de trabajo y moverse a el
 mkdir -p /app
@@ -670,9 +687,7 @@ AWS_REGION="${AWS_REGION}"
 #   -e AWS_REGION=$AWS_REGION \
 #   aquasense-api
 
-export AWS_DEFAULT_REGION="us-east-1"
-export REGION=$AWS_DEFAULT_REGION
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
 aws ecr create-repository --repository-name aquasense-api
 
 aws ecr get-login-password --region $REGION \
