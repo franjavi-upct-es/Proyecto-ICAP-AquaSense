@@ -73,7 +73,7 @@ def lambda_handler(event, context):
         print("=" * 70)
         print("INICIO DEL PROCESAMIENTO - AquaSenseCloud")
         print("=" * 70)
-        print(f"Event: {json.dump(event, indent=2)}")
+        print(f"Event: {json.dumps(event, indent=2)}")
 
         # Extraer información del archivo S3
         bucket = event["Records"][0]["s3"]["bucket"]["name"]
