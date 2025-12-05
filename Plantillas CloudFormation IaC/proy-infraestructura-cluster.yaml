@@ -12,11 +12,6 @@ Parameters:
     Type: String
     Default: proy-infraestructura-soporte
 
-  ExistingRoleArn:
-    Type: String
-    Description: ARN del rol IAM de ejecución existente (LabRole)
-    Default: arn:aws:iam::<ID>:role/LabRole
-
 
 Resources:
 
@@ -128,8 +123,12 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - EC2
-      ExecutionRoleArn: !Ref ExistingRoleArn
-      TaskRoleArn: !Ref ExistingRoleArn
+      ExecutionRoleArn: 
+        Fn::ImportValue: 
+            !Sub "${NetworkStackName}-ARNLabrol"
+      TaskRoleArn:  
+        Fn::ImportValue: 
+            !Sub "${NetworkStackName}-ARNLabrol"
       ContainerDefinitions:
         - Name: proy-aquasense-api
           Image: !Ref UriImage
