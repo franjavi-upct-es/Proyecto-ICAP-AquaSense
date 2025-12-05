@@ -38,6 +38,7 @@ AWSCloudGroup(aws_cloud) {
         ' --- CAPAS SUPERIORES (Invisibles) ---
         ' Usamos " " para quitar el titulo y #line:transparent para quitar el borde
         rectangle " " as logic_layer #line:transparent {
+        
             AuthenticatedUser(user, "", "")
             SimpleStorageServiceBucket(s3_bucket, "Bucket", "")
             Lambda(lambda, "AWS Lambda", "")
@@ -55,12 +56,12 @@ AWSCloudGroup(aws_cloud) {
         ' --- VPC ---
         VPCGroup(vpc, "VPC: 192.168.0.0/16") {
             
-            VPCInternetGateway(igw, "Internet: gatewary", "")
+            ' CORRECCIÓN AQUÍ: Se cambió "gatewary" por "Gateway"
+            VPCInternetGateway(igw, "Internet: Gateway", "")
             ElasticLoadBalancingApplicationLoadBalancer(alb, "proy-Cluster-AS\nALBSecurityGroup", "")
             ElasticContainerServiceService(service, "proy-AS-Service", "")
             
-            ' GRUPO DE SEGURIDAD (Mantenemos este visible si quieres la caja roja, 
-            ' si no, cambia SecurityGroupGroup por un rectangle transparente también)
+            ' GRUPO DE SEGURIDAD
             SecurityGroupGroup(cluster_sg, "proy-Cluster-AS-TaskSecurityGroup") {
                 
                 ' 1. Zona A (Izquierda)
