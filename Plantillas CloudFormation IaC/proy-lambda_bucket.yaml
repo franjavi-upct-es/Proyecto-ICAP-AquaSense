@@ -26,9 +26,8 @@ Resources:
       FunctionName: proy-marmenor-process-csv
       Runtime: python3.11 
       Handler: funcion_lambda.lambda_handler
-      Role:
-       Fn::ImportValue: 
-          !Sub "${NetworkStackName}-ARNLabrol"
+      # REPLACE THE ROLE IMPORT WITH THIS:
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Timeout: 60
       MemorySize: 256
       Code:

@@ -2,10 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Plantilla que crea la infraestructura ECS EC2 con awsvpc
 
 Parameters:
-  UriImage:
-    Description: URI de la imagen del repositorio
-    Type: String
-    Default: <ID>.dkr.ecr.<Region>.amazonaws.com/aquasense-api:latest"
 
   NetworkStackName:
     Description: Nombre de la pila de infraestructura base
@@ -123,15 +119,13 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - EC2
-      ExecutionRoleArn: 
-        Fn::ImportValue: 
-            !Sub "${NetworkStackName}-ARNLabrol"
-      TaskRoleArn:  
-        Fn::ImportValue: 
-            !Sub "${NetworkStackName}-ARNLabrol"
+      # Rol dinámico usando AccountId
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+      TaskRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       ContainerDefinitions:
         - Name: proy-aquasense-api
-          Image: !Ref UriImage
+          # IMAGEN AUTOMATIZADA AQUÍ:
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/aquasense-api:latest"
           PortMappings:
             - ContainerPort: 8080
           Environment:
