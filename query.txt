@@ -1,0 +1,28 @@
+#PRUEBAS HABIENDO METIDO CSV1
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/maxdiff?month=12&year=2022
+#15.562013146240401 - 20.05849040081978 = -4.49647725457938
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/sd?month=12&year=2022
+#0.2562630435361805
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/sd?month=11&year=2022
+#0.406611695429108
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/temp?month=12&year=2022
+#(15.230866866053274 + 15.562013146240401 + 15.20141548830982 + 15.308882050032043 + 14.605052701232356)/5 = 15.18164605
+
+#PRUEBAS HABIENDO METIDO CSV1 + CSV_Pruebas
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/maxdiff?month=12&year=2022
+#19.308882050032043 - 23.05849040081978 = -3.749608351
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/sd?month=12&year=2022
+#0.30346864469454019
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/sd?month=11&year=2022
+#0.506611695429108
+
+http://proy-marmenor-alb-263414062.us-east-1.elb.amazonaws.com/temp?month=12&year=2022
+#(15.230866866053274 + 15.562013146240401 + 15.20141548830982 + 15.308882050032043 +   15.562013146240401 + 19.308882050032043 + 17.605052701232356)/7 = 
+#16.04802227
+(17.605052701232356 + 19.308882050032043 + 15.562013146240401)/ 3

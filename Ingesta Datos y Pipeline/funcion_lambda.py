@@ -337,21 +337,13 @@ Infraestructuras para la Computación de Altas Prestaciones - UPCT
     except Exception as e:
         print(f"ERROR enviando alerta SNS: {str(e)}")
 
-def get_previous_month_max_temp(current_year, current_month):
-    # Calcular mes anterior
-    prev_month = current_month - 1
-    prev_year = current_year
-    if prev_month == 0:
-        prev_month = 12
-        prev_year -= 1
-
-    prev_key = f"{prev_year}-{prev_month:02d}"
-
+def get_current_month_max_temp(current_year, current_month):
+    curr_key = f"{current_year}-{current_month:02d}"
     try:
         # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
         response = table.get_item(
             Key={
-                'monthYear': prev_key,
+                'monthYear': curr_key,
                 'metric_type': 'temp'
             }
         )
@@ -359,10 +351,52 @@ def get_previous_month_max_temp(current_year, current_month):
             # DynamoDB devuelve Decimal, convertimos a float
             return float(response['Item'].get('max_temp', 0))
     except Exception as e:
-        print(f"No se pudo obtener datos del mes {prev_key}: {e}")
-
+        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
     return None # No hay datos previos
 
+def get_previous_month_max_temp(current_year, current_month):
+    # Calcular mes anterior
+    prev_month = current_month - 1
+    prev_year = current_year
+    if prev_month == 0:
+        prev_month = 12
+        prev_year -= 1
+    return get_current_month_max_temp(prev_year, prev_month)
+
+def get_current_month_max_sd(current_year, current_month):
+    curr_key = f"{current_year}-{current_month:02d}"
+    try:
+        # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
+        response = table.get_item(
+            Key={
+                'monthYear': curr_key,
+                'metric_type': 'sd'
+            }
+        )
+        if 'Item' in response:
+            # DynamoDB devuelve Decimal, convertimos a float
+            return float(response['Item'].get('value', 0))
+    except Exception as e:
+        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
+    return None # No hay datos previos
+
+def get_current_month_avg_temp(current_year, current_month):
+    curr_key = f"{current_year}-{current_month:02d}"
+    try:
+        # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
+        response = table.get_item(
+            Key={
+                'monthYear': curr_key,
+                'metric_type': 'temp'
+            }
+        )
+        if 'Item' in response:
+            # DynamoDB devuelve Decimal, convertimos a float
+            return float(response['Item'].get('value', 0)), float(response['Item'].get('record_count', 0))
+    except Exception as e:
+        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
+
+    return None, None # No hay datos previos
 # ============================================================================
 # FUNCIONES DE CÁLCULO DE MÉTRICAS
 # ============================================================================
@@ -376,7 +410,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
         a) Máxima desviación del conjunto de datos obtenidos durante el mes.
         b) Diferencia de la máxima temperatura del mes respecto a la máxima
            temperatura del mes anterior.
-
+        c) Temperatura media de los datos del mes
     Args:
         weekly_data: Lista de registros semanales
 
@@ -414,23 +448,40 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
 
         # Calcular métricas del mes
         max_deviation = max(r["desviacion"] for r in records)
-        avg_temperature = sum(r["media"] for r in records) / len(records)
         max_temperature = max(r["media"] for r in records)
-
-        # 1. Intentar obtener max_temp del mes anterior de la variable local (si venía en el mismo CSV)
+        
+        # 1. Obtener la maxima temperatura del mes actual si está en el csv 
+        max_temp_db = get_current_month_max_temp(records[0]['year'], records[0]['month']) 
+        if max_temp_db is not None:
+            if max_temp_db > max_temperature:
+                max_temperature = max_temp_db
+        # 2. Intentar obtener max_temp del mes anterior de la variable local (si venía en el mismo CSV)
         prev_max_db = None
     
-        # 2. Si no está en local, buscar en DynamoDB (caso de subida incremental)
+        # 3. Si no está en local, buscar en DynamoDB (caso de subida incremental)
         if previous_max_temp is None:
             prev_max_db = get_previous_month_max_temp(records[0]['year'], records[0]['month'])
         else:
             prev_max_db = previous_max_temp
 
-        # 3. Calcular diferencia
+        # 4. Calcular diferencia
         if prev_max_db is not None:
             temp_diff = max_temperature - prev_max_db
         else:
             temp_diff = 0.0 # Es el primer dato histórico que tenemos
+
+        # 5. Calcular media mensual (aprox)
+        curr_avg_db, curr_rec_db = get_current_month_avg_temp(records[0]['year'], records[0]['month'])
+        if curr_avg_db is not None:
+            avg_temperature = (sum(r["media"] for r in records) + curr_avg_db*curr_rec_db)/(len(records)+curr_rec_db)
+        else:
+            avg_temperature = sum(r["media"] for r in records)/len(records)
+
+        # 6. Calcular maxima desviacion
+        max_sd_db = get_current_month_max_sd(records[0]['year'], records[0]['month']) 
+        if max_sd_db is not None:
+            if max_sd_db > max_deviation:
+                max_deviation = max_sd_db
 
         monthly_metrics.append(
             {
@@ -439,7 +490,7 @@ def calculate_monthly_metrics(weekly_data: list) -> list:
                 "avg_temperature": avg_temperature,
                 "max_temperature": max_temperature,
                 "temp_diff": temp_diff,
-                "record_count": len(records),
+                "record_count": len(records) + curr_rec_db,
             }
         )
 
@@ -491,7 +542,7 @@ def store_in_dynamodb(monthly_metrics: list):
         temp_diff_decimal = Decimal(str(metrics["temp_diff"]))
 
         try:
-            # 1. Almacenar máxiam desviación (sd = standard deviation)
+            # 1. Almacenar máxima desviación (sd = standard deviation)
             table.put_item(
                 Item={
                     "monthYear": monthYear,
@@ -502,7 +553,7 @@ def store_in_dynamodb(monthly_metrics: list):
                 }
             )
 
-            # 2. Almacenar temperatura media mensaul (temp)
+            # 2. Almacenar temperatura media mensual (temp)
             table.put_item(
                 Item={
                     "monthYear": monthYear,
