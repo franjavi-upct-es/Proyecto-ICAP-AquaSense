@@ -29,16 +29,14 @@ import json
 import boto3
 import csv
 import os
-from datetime import datetime
-from io import StringIO
+import urllib.parse
+from datetime import datetime, timedelta
 from decimal import Decimal
-from collections import defaultdict
 
 # ============================================================================
-# CONFGIURACIÓN Y CLIENTES AWS
+# CONFIGURACIÓN Y CLIENTES AWS
 # ============================================================================
 
-# Clientes AWS
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 sns_client = boto3.client("sns")
@@ -46,426 +44,157 @@ sns_client = boto3.client("sns")
 # Variables de entorno
 DYNAMODB_TABLE = os.environ["DYNAMODB_TABLE"]
 SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
-DEVIATION_THRESHOLD = float(os.environ.get("DEVIATION_THRESHOLD", "0.5"))
+DEVIATION_THRESHOLD = Decimal(str(os.environ.get("DEVIATION_THRESHOLD", "0.5")))
 
 # Tabla DynamoDB
 table = dynamodb.Table(DYNAMODB_TABLE)
 
+
 # ============================================================================
-# FUNCIÓN PRINCIPAL - HANDLER
+# FUNCIONES AUXILIARES
 # ============================================================================
 
+def round_decimal(value):
+    """Redondea a 2 decimales para consistencia"""
+    return value.quantize(Decimal("0.01"))
+
+def send_alert(fecha_str, desviacion):
+    """Envía la notificación SNS"""
+    try:
+        message = f"ALERTA: Desviación de {desviacion} detectada el {fecha_str}."
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject="Alerta Mar Menor - Desviación Alta",
+            Message=message
+        )
+    except Exception as e:
+        print(f"Error enviando SNS: {e}")
+
+# ============================================================================
+# HANDLER PRINCIPAL
+# ============================================================================
 
 def lambda_handler(event, context):
-    """
-    Handler principal de Lambda.
+    print("Event received by Lambda function: " + json.dumps(event, indent=2))
 
-    Se ejecuta cuando se sube un archivo CSV a s3.
+    # Obtener bucket y key del evento
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
+    local_filename = f"/tmp/{os.path.basename(key)}"
 
-    Args:
-        event: Evento de S3 con información del archivo
-        context: Contexto de ejecución de Lambda
-
-    Returns:
-        dict: Respuesta con statusCode y mensaje
-    """
     try:
-        print("=" * 70)
-        print("INICIO DEL PROCESAMIENTO - AquaSenseCloud")
-        print("=" * 70)
-        print(f"Event: {json.dumps(event, indent=2)}")
+        # Descargar el archivo desde S3 (Lógica de referencia)
+        s3_client.download_file(bucket, key, local_filename)
 
-        # Extraer información del archivo S3
-        bucket = event["Records"][0]["s3"]["bucket"]["name"]
-        key = event["Records"][0]["s3"]["object"]["key"]
+        # Procesar el archivo CSV
+        with open(local_filename, encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile, delimiter=',')
+            data = {}
 
-        print("Procesando archivo:")
-        print(f"\tBucket: {bucket}")
-        print(f"\tKey: {key}")
+            for row in reader:
+                # Parseo de datos
+                try:
+                    fecha = datetime.strptime(row['Fecha'], '%Y/%m/%d')
+                except ValueError:
+                     # Intento de soporte para formatos alternativos si fuera necesario
+                     fecha = datetime.strptime(row['Fecha'], '%Y-%m-%d')
+                
+                # Usamos 'monthYear' como clave para mantener consistencia con tu proyecto
+                mes = fecha.strftime('%Y-%m') # Formato YYYY-MM
+                
+                temp_media = round_decimal(Decimal(row['Medias']))
+                desviacion = round_decimal(Decimal(row['Desviaciones']))
 
-        # 1. Leer archivo CSV de S3
-        csv_data = read_csv_from_s3(bucket, key)
+                # Agregación en memoria (Lógica de referencia)
+                if mes not in data:
+                    data[mes] = {
+                        'max_temp': temp_media,
+                        'max_sd': desviacion,
+                        'mean_temp_sum': temp_media,
+                        'mean_temp_count': 1,
+                        'records': [(fecha, temp_media, desviacion)]
+                    }
+                else:
+                    data[mes]['max_temp'] = max(data[mes]['max_temp'], temp_media)
+                    data[mes]['max_sd'] = max(data[mes]['max_sd'], desviacion)
+                    data[mes]['mean_temp_sum'] += temp_media
+                    data[mes]['mean_temp_count'] += 1
+                    data[mes]['records'].append((fecha, temp_media, desviacion))
 
-        # 2. Parsear datos del CSV
-        weekly_data = parse_csv_data(csv_data)
+                # Notificar si la desviación supera el umbral (Lógica de referencia)
+                if desviacion > DEVIATION_THRESHOLD:
+                    send_alert(fecha.strftime('%Y/%m/%d'), desviacion)
 
-        # 3. PRIMERO: Almacenar datos semanales individuales (sobrescribe duplicados)
-        store_weekly_data(weekly_data)
+            # Procesar y actualizar DynamoDB con datos combinados
+            for mes, metrics in data.items():
+                try:
+                    # Consultar el registro existente en la base de datos
+                    # Nota: Usamos 'monthYear' como Partition Key según tu infraestructura
+                    existing_item_resp = table.get_item(Key={'monthYear': mes})
+                    existing_item = existing_item_resp.get('Item', {})
 
-        # 4. Verificar alarmas de desviación
-        check_deviation_alerts(weekly_data, key)
+                    # Calcular mes anterior para max_diff_temp
+                    current_month_dt = datetime.strptime(mes, '%Y-%m')
+                    # Restamos días para ir al mes anterior de forma segura
+                    previous_month_dt = current_month_dt.replace(day=1) - timedelta(days=1)
+                    previous_month = previous_month_dt.strftime('%Y-%m')
 
-        # 5. Calcular métricas mensuales desde DynamoDB (datos únicos)
-        monthly_metrics = calculate_monthly_metrics_from_db(weekly_data)
+                    # Caso 1: Mes anterior en la base de datos
+                    previous_item_resp = table.get_item(Key={'monthYear': previous_month})
+                    previous_item = previous_item_resp.get('Item', {})
+                    previous_max_temp_db = Decimal(previous_item.get('max_temp', 0))
 
-        # 6. Almacenar métricas agregadas en DynamoDB
-        store_monthly_metrics(monthly_metrics)
+                    # Caso 2: Mes anterior en el archivo actual (Lógica de referencia)
+                    if previous_month in data:
+                        previous_max_temp_file = data[previous_month]['max_temp']
+                    else:
+                        previous_max_temp_file = Decimal('0')
 
-        print("\n" + "=" * 70)
-        print("PROCESAMIENTO COMPLETADO EXITOSAMENTE")
-        print("=" * 70)
-        print(f"Registros semanales procesados: {len(weekly_data)}")
-        print(f"Meses actualizados: {len(monthly_metrics)}")
+                    # Determinar el máximo del mes anterior (DB vs Archivo)
+                    previous_max_temp = max(previous_max_temp_db, previous_max_temp_file)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "CSV procesado exitosamente",
-                    "file": key,
-                    "weekly_records": len(weekly_data),
-                    "monthly_records": len(monthly_metrics),
-                }
-            ),
-        }
+                    # Combinar métricas locales con las de la DB
+                    combined_max_temp = max(metrics['max_temp'], Decimal(existing_item.get('max_temp', 0)))
+                    combined_max_sd = max(metrics['max_sd'], Decimal(existing_item.get('max_sd', 0)))
+
+                    # Cálculo de media ponderada
+                    total_mean_temp_sum = metrics['mean_temp_sum'] + Decimal(existing_item.get('mean_temp', 0)) * Decimal(existing_item.get('mean_temp_count', 0))
+                    total_mean_temp_count = metrics['mean_temp_count'] + Decimal(existing_item.get('mean_temp_count', 0))
+                    
+                    if total_mean_temp_count > 0:
+                        combined_mean_temp = round_decimal(total_mean_temp_sum / total_mean_temp_count)
+                    else:
+                        combined_mean_temp = Decimal('0')
+
+                    # Diferencia con el mes anterior
+                    max_diff_temp = round_decimal(combined_max_temp - previous_max_temp)
+
+                    # Actualizar o insertar el registro (Estructura plana sin Sort Key)
+                    table.put_item(
+                        Item={
+                            'monthYear': mes, # PK mantenida como monthYear
+                            'max_temp': combined_max_temp,
+                            'max_sd': combined_max_sd,
+                            'mean_temp': combined_mean_temp,
+                            'max_diff_temp': max_diff_temp,
+                            'mean_temp_count': total_mean_temp_count,
+                            'last_updated': datetime.now().isoformat()
+                        }
+                    )
+                    print(f"Updated DynamoDB for {mes}")
+
+                except Exception as e:
+                    print(e)
+                    raise Exception(f"Error updating DynamoDB for {mes}: {str(e)}")
 
     except Exception as e:
-        print("=" * 70)
-        print(f"ERROR EN EL PROCESAMIENTO: {str(e)}")
-        print("=" * 70)
-
-        import traceback
-
-        traceback.print_exc()
-
-        return {
-            "statusCode": 500,
-            "body": json.dumps(
-                {"error": str(e), "file": key if "key" in locals() else "unknown"}
-            ),
-        }
-
-
-# ============================================================================
-# FUNCIONES DE LECTURA Y PARSING
-# ============================================================================
-
-
-def read_csv_from_s3(bucket: str, key: str) -> str:
-    """
-    Lee el contenido de un archivo CSV desde S3.
-
-    Args:
-        bucket: Nombre del bucket S3
-        key: Key del objeto en S3
-
-    Returns:
-        Contenido del archivo CSV
-
-    Raises:
-        Exception: Si hay algún error al leer el archivo
-    """
-    try:
-        print("Leyendo archivo desde S3")
-        response = s3_client.get_object(Bucket=bucket, Key=key)
-        content = response["Body"].read().decode("utf-8")
-
-        lines = content.count("\n")
-        print(f"Archivo leído con éxito ({lines} líneas)")
-
-        return content
-    except Exception as e:
-        raise Exception(f"Error leyendo archivo desde S3: {str(e)}")
-
-
-def parse_csv_data(csv_content: str) -> list:
-    """
-    Parsea el contenido CSV y devuelve una lista de registros semanales.
-
-    Formato esperado del CSV:
-        Fecha,Medias,Desviaciones
-        2017/03/22,16.78,0.287
-        2017/03/30,17.32,0.403
-
-    Args:
-        csv_content: Contenido del archivo CSV
-
-    Returns:
-        Lista de diccionarios con datos parseados
-            [{
-                'fecha': datetime,
-                'year': int,
-                'month': int,
-                'media': float,
-                'desviacion': float
-            }, ...]
-    """
-    weekly_data = []
-    csv_file = StringIO(csv_content)
-    reader = csv.DictReader(csv_file)
-
-    print("Parseando datos CSV...")
-
-    # Formatos de fecha esperados
-    date_formats = ["%Y/%m/%d"]
-
-    for row_num, row in enumerate(reader, start=2):  # Línea siguiente a header
-        try:
-            fecha_str = row["Fecha"].strip()
-
-            # Intentar parsear la fecha con diferentes formatos
-            try:
-                fecha = datetime.strptime(fecha_str, "%Y/%m/%d")
-                # Usar directamente el mes de la fecha, sin ajustes
-                mes = fecha.month
-                año = fecha.year
-            except Exception as e:
-                print(f"No se pudo parsear fecha en línea {row_num}: {fecha_str}")
-                continue
-
-            # Parsear valores numéricos
-            media = float(row["Medias"])
-            desviacion = float(row["Desviaciones"])
-
-            weekly_data.append(
-                {
-                    "fecha": fecha,
-                    "year": año,
-                    "month": mes,
-                    "media": media,
-                    "desviacion": desviacion,
-                }
-            )
-
-        except KeyError as e:
-            print(f"ADVERTENCIA: Columna faltante en línea {row_num}: {e}")
-            continue
-        except ValueError as e:
-            print(f"ADVERTENCIA: Error de conversión en línea {row_num}: {e}")
-            continue
-        except Exception as e:
-            print(f"ADVERTENCIA: Error inesperado en línea {row_num}: {e}")
-            continue
-
-    print(f"Total de registros semanales parseados: {len(weekly_data)}")
-
-    if len(weekly_data) == 0:
-        raise Exception("No se pudieron parsear registros válidos del CSV")
-
-    return weekly_data
-
-
-
-# ============================================================================
-# FUNCIONES DE DETECCIÓN DE ALARMAS
-# ============================================================================
-
-
-def check_deviation_alerts(weekly_data: list, filename: str):
-    """
-    Verifica si alguna desviación semanal supera el umbral y envía alarmas.
-
-    Requisito del proyecto:
-        "Necesitan saber cuándo la desviación de la temperatura semanal
-        del agua del Mar Menor es superior a 0.5"
-
-    Args:
-        weekly_data: lista de registros semanales
-        filename: Nombre del archivo procesado
-    """
-    print(f"Verificando alarmas (umbral: {DEVIATION_THRESHOLD}°C)...")
-
-    alerts_sent = 0
-
-    for record in weekly_data:
-        if record["desviacion"] > DEVIATION_THRESHOLD:
-            send_alert(record, filename)
-            alerts_sent += 1
-
-    if alerts_sent > 0:
-        print(f"Total alertas enviadas: {alerts_sent}")
-    else:
-        print("No se detectaron desviaciones que superen el umbral")
-
-
-def send_alert(record: dict, filename: str):
-    """
-    Envía una alerta por SNS cuando se detecta una desviación alta.
-
-    Args:
-        record: Registro con desviación alta
-        filename: Nombre del archivo procesado
-    """
-    try:
-        fecha = record["fecha"].strftime("%Y-%m-%d")
-        desviacion = record["desviacion"]
-        media = record["media"]
-
-        subject = "⚠️ Alarma Mar Menor - Desviación Alta Detectada"
-
-        message = f"""
-⚠️ ALERTA DE TEMPERATURA - MAR MENOR
-=========================================
-
-Se ha detectado una desviación de temperatura superior al umbral establecido.
-
-📊 DETALLES DE LA ALERTA
------------------------------------------
-- Fecha del registro:   {fecha}
-- Desviación detectada: {desviacion:.4f}°C ⚠️
-- Umbral configurado:   {DEVIATION_THRESHOLD}°C
-- Temperatura media:    {media:.2f}°C
-
-ℹ️ INFORMACIÓN ADICIONAL
------------------------------------------
-- Archivo procesado:    {filename}
-- Timestamp:            {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-- Sistema:              AquaSenseCloud Lambda Function
-
-🔍 INTERPRETACIÓN
------------------------------------------
-Una desviación de {desviacion:.4f}°C indica alta variabilidad en las
-temperaturas del agua. Posibles causas:
-  • Cambios climáticos bruscos
-  • Fenómenos meteorológicos
-  • Alteraciones en la laguna
-
-> Se recomienda revisar los datos semanales detallados.
-
---
-Sistema AquaSenseCloud
-Infraestructuras para la Computación de Altas Prestaciones - UPCT
-        """.strip()
-
-        response = sns_client.publish(
-            TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=message
-        )
-
-        print(f"Alerta enviada para {fecha} (desv: {desviacion:.4f}°C)")
-        print(f"SNS MessageId: {response['MessageId']}")
-
-    except Exception as e:
-        print(f"ERROR enviando alerta SNS: {str(e)}")
-
-def get_current_month_max_temp(current_year, current_month):
-    curr_key = f"{current_year}-{current_month:02d}"
-    try:
-        # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
-        response = table.get_item(
-            Key={
-                'monthYear': curr_key,
-                'metric_type': 'temp'
-            }
-        )
-        if 'Item' in response:
-            # DynamoDB devuelve Decimal, convertimos a float
-            return float(response['Item'].get('max_temp', 0))
-    except Exception as e:
-        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
-    return None # No hay datos previos
-
-def get_previous_month_max_temp(current_year, current_month):
-    # Calcular mes anterior
-    prev_month = current_month - 1
-    prev_year = current_year
-    if prev_month == 0:
-        prev_month = 12
-        prev_year -= 1
-    return get_current_month_max_temp(prev_year, prev_month)
-
-def get_current_month_max_sd(current_year, current_month):
-    curr_key = f"{current_year}-{current_month:02d}"
-    try:
-        # Buscamos la métrica 'temp' que contiene el artributo 'max_temp'
-        response = table.get_item(
-            Key={
-                'monthYear': curr_key,
-                'metric_type': 'sd'
-            }
-        )
-        if 'Item' in response:
-            # DynamoDB devuelve Decimal, convertimos a float
-            return float(response['Item'].get('value', 0))
-    except Exception as e:
-        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
-    return None # No hay datos previos
-
-def get_current_month_avg_temp(current_year, current_month):
-    curr_key = f"{current_year}-{current_month:02d}"
-    try:
-        # Buscamos la métrica 'temp' que contiene el artributo 'sum_temp'
-        response = table.get_item(
-            Key={
-                'monthYear': curr_key,
-                'metric_type': 'temp'
-            }
-        )
-        if 'Item' in response:
-            # DynamoDB devuelve Decimal, convertimos a float
-            # Devolvemos suma acumulada y contador para calcular media correctamente
-            sum_temp = float(response['Item'].get('sum_temp', 0))
-            count = float(response['Item'].get('record_count', 0))
-            return sum_temp, count
-    except Exception as e:
-        print(f"No se pudo obtener datos del mes {curr_key}: {e}")
-
-    return None, None # No hay datos previos
-
-# ============================================================================
-# FUNCIONES DE ALMACENAMIENTO DE DATOS SEMANALES
-# ============================================================================
-
-def store_weekly_data(weekly_data: list):
-    """
-    Almacena cada registro semanal individualmente en DynamoDB.
-    Si una fecha ya existe, se SOBRESCRIBE con el nuevo valor.
+        print(e)
+        raise Exception(f"Error processing file {key} from bucket {bucket}: {str(e)}")
     
-    Estructura:
-        - PK: fecha en formato 'YYYY-MM-DD'
-        - SK: 'weekly'
-        - Atributos: temperature, deviation, year, month
-    
-    Args:
-        weekly_data: Lista de registros semanales parseados
-    """
-    print("\n" + "="*70)
-    print("ALMACENANDO REGISTROS SEMANALES INDIVIDUALES")
-    print("="*70)
-    
-    timestamp = datetime.now().isoformat()
-    stored_count = 0
-    updated_count = 0
-    
-    for record in weekly_data:
-        fecha_key = record['fecha'].strftime('%Y-%m-%d')
-        
-        # Verificar si ya existe (para logging)
-        try:
-            response = table.get_item(
-                Key={
-                    'monthYear': fecha_key,
-                    'metric_type': 'weekly'
-                }
-            )
-            if 'Item' in response:
-                old_temp = float(response['Item']['temperature'])
-                updated_count += 1
-                print(f"  ⟳ Actualizando {fecha_key}: {old_temp:.2f}°C → {record['media']:.2f}°C")
-            else:
-                stored_count += 1
-                print(f"  ✓ Nuevo registro {fecha_key}: {record['media']:.2f}°C")
-        except:
-            stored_count += 1
-            print(f"  ✓ Nuevo registro {fecha_key}: {record['media']:.2f}°C")
-        
-        # put_item SOBRESCRIBE automáticamente si la clave ya existe
-        table.put_item(
-            Item={
-                'monthYear': fecha_key,  # PK: fecha exacta
-                'metric_type': 'weekly',  # SK: tipo de dato
-                'temperature': Decimal(str(record['media'])),
-                'deviation': Decimal(str(record['desviacion'])),
-                'year': record['year'],
-                'month': record['month'],
-                'last_updated': timestamp
-            }
-        )
-    
-    print(f"\n📊 RESUMEN DE ALMACENAMIENTO SEMANAL:")
-    print(f"  • Registros nuevos:       {stored_count}")
-    print(f"  • Registros actualizados: {updated_count}")
-    print(f"  • Total procesado:        {len(weekly_data)}")
-    print("="*70)
+    finally:
+        # Limpiar el archivo temporal
+        if os.path.exists(local_filename):
+            os.remove(local_filename)
 
 # ============================================================================
 # FUNCIONES DE CÁLCULO DE MÉTRICAS

@@ -140,9 +140,34 @@
 	      \end{itemize}
 \end{enumerate}
 
+\pagebreak
+
 \section{Ejemplos de demostración de correcta funcionalidad}
 \begin{itemize}[label=\textbullet]
 	\item \textbf{Función Lambda:}
+	
+	\begin{center}
+		\includegraphics[width=\textwidth]{imgs/screenshot001}
+	\end{center}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=0.5\linewidth]{imgs/screenshot002}
+		\caption{Ejemplo: Contenido del fichero: "\texttt{\textbf{temperatura\_1.csv}}"}
+		\label{fig:screenshot002}
+	\end{figure}
+	
+	\underline{\textbf{Nota:}} Observar que la función lambda trata con la posibilidad de ingesta de datos sin importar los siguientes factores: su orden temporal, su repetición y datos mensuales separados en distintos ficheros.
+	
+	\textbf{Comentar también que los datos transformados se almacenan en la tabla de DynamoDB correctamente si se realiza la ingesta de manera controlada y con ficheros de un tamaño medio (2-3 Kbytes) como los utilizados en las pruebas realizadas.}
+	
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=0.5\linewidth]{imgs/screenshot003}
+		\caption{Envío de correo a los analistas mediante un tópico definido mediante AWS SNS}
+	\end{figure}
+	
+	
 	\item \textbf{ECR:}
 	\item \textbf{Automatización del aprovisionamiento de la infraestructura mediante CloudFormation:}
 	\item \textbf{Auto Escalado con métricas de utilización de recursos:}
