@@ -89,19 +89,23 @@ def lambda_handler(event, context):
         # 2. Parsear datos del CSV
         weekly_data = parse_csv_data(csv_data)
 
-        # 3. Verificar alarmas de desviación
+        # 3. PRIMERO: Almacenar datos semanales individuales (sobrescribe duplicados)
+        store_weekly_data(weekly_data)
+
+        # 4. Verificar alarmas de desviación
         check_deviation_alerts(weekly_data, key)
 
-        # 4. Calcular métricas mensuales
-        monthly_metrics = calculate_monthly_metrics(weekly_data)
+        # 5. Calcular métricas mensuales desde DynamoDB (datos únicos)
+        monthly_metrics = calculate_monthly_metrics_from_db(weekly_data)
 
-        # 5. Almacenar en DynamoDB
-        store_in_dynamodb(monthly_metrics)
+        # 6. Almacenar métricas agregadas en DynamoDB
+        store_monthly_metrics(monthly_metrics)
 
         print("\n" + "=" * 70)
         print("PROCESAMIENTO COMPLETADO EXITOSAMENTE")
         print("=" * 70)
-        print(f"Número de registros mensuales actualizados: {len(monthly_metrics)}")
+        print(f"Registros semanales procesados: {len(weekly_data)}")
+        print(f"Meses actualizados: {len(monthly_metrics)}")
 
         return {
             "statusCode": 200,
@@ -109,8 +113,8 @@ def lambda_handler(event, context):
                 {
                     "message": "CSV procesado exitosamente",
                     "file": key,
-                    "monthly_records": len(monthly_metrics),
                     "weekly_records": len(weekly_data),
+                    "monthly_records": len(monthly_metrics),
                 }
             ),
         }
@@ -396,6 +400,73 @@ def get_current_month_avg_temp(current_year, current_month):
         print(f"No se pudo obtener datos del mes {curr_key}: {e}")
 
     return None, None # No hay datos previos
+
+# ============================================================================
+# FUNCIONES DE ALMACENAMIENTO DE DATOS SEMANALES
+# ============================================================================
+
+def store_weekly_data(weekly_data: list):
+    """
+    Almacena cada registro semanal individualmente en DynamoDB.
+    Si una fecha ya existe, se SOBRESCRIBE con el nuevo valor.
+    
+    Estructura:
+        - PK: fecha en formato 'YYYY-MM-DD'
+        - SK: 'weekly'
+        - Atributos: temperature, deviation, year, month
+    
+    Args:
+        weekly_data: Lista de registros semanales parseados
+    """
+    print("\n" + "="*70)
+    print("ALMACENANDO REGISTROS SEMANALES INDIVIDUALES")
+    print("="*70)
+    
+    timestamp = datetime.now().isoformat()
+    stored_count = 0
+    updated_count = 0
+    
+    for record in weekly_data:
+        fecha_key = record['fecha'].strftime('%Y-%m-%d')
+        
+        # Verificar si ya existe (para logging)
+        try:
+            response = table.get_item(
+                Key={
+                    'monthYear': fecha_key,
+                    'metric_type': 'weekly'
+                }
+            )
+            if 'Item' in response:
+                old_temp = float(response['Item']['temperature'])
+                updated_count += 1
+                print(f"  ⟳ Actualizando {fecha_key}: {old_temp:.2f}°C → {record['media']:.2f}°C")
+            else:
+                stored_count += 1
+                print(f"  ✓ Nuevo registro {fecha_key}: {record['media']:.2f}°C")
+        except:
+            stored_count += 1
+            print(f"  ✓ Nuevo registro {fecha_key}: {record['media']:.2f}°C")
+        
+        # put_item SOBRESCRIBE automáticamente si la clave ya existe
+        table.put_item(
+            Item={
+                'monthYear': fecha_key,  # PK: fecha exacta
+                'metric_type': 'weekly',  # SK: tipo de dato
+                'temperature': Decimal(str(record['media'])),
+                'deviation': Decimal(str(record['desviacion'])),
+                'year': record['year'],
+                'month': record['month'],
+                'last_updated': timestamp
+            }
+        )
+    
+    print(f"\n📊 RESUMEN DE ALMACENAMIENTO SEMANAL:")
+    print(f"  • Registros nuevos:       {stored_count}")
+    print(f"  • Registros actualizados: {updated_count}")
+    print(f"  • Total procesado:        {len(weekly_data)}")
+    print("="*70)
+
 # ============================================================================
 # FUNCIONES DE CÁLCULO DE MÉTRICAS
 # ============================================================================
@@ -403,156 +474,221 @@ def get_current_month_avg_temp(current_year, current_month):
 
 def calculate_monthly_metrics(weekly_data: list) -> list:
     """
-    Calcula las métricas mensuales requeridas por el proyecto.
+    DEPRECATED: Esta función ya no se usa directamente.
+    Usar calculate_monthly_metrics_from_db() en su lugar.
+    """
+    pass
 
+
+def calculate_monthly_metrics_from_db(weekly_data: list) -> list:
+    """
+    Calcula métricas mensuales consultando SOLO datos únicos de DynamoDB.
+    Esto garantiza que si hubo duplicados, solo se cuenta el último valor.
+    
     Requisitos del proyecto:
         a) Máxima desviación del conjunto de datos obtenidos durante el mes.
         b) Diferencia de la máxima temperatura del mes respecto a la máxima
            temperatura del mes anterior.
         c) Temperatura media de los datos del mes
+    
     Args:
-        weekly_data: Lista de registros semanales
-
+        weekly_data: Lista de registros semanales (para saber qué meses procesar)
+    
     Returns:
-        Lista de diccionarios con métricas mensuales
+        Lista de métricas mensuales calculadas desde datos únicos
             [{
                 'monthYear': str,
                 'max_deviation': float,
                 'avg_temperature': float,
                 'max_temperature': float,
                 'temp_diff': float,
-                'record_count': int
+                'record_count': int,
+                'sum_temp': float
             }, ...]
     """
-    print("Calculando métricas mensuales...")
-
-    # 1. Agrupar datos por mes/año
-    monthly_groups = defaultdict(list)
-
+    print("\n" + "="*70)
+    print("CALCULANDO MÉTRICAS MENSUALES DESDE DATOS ÚNICOS")
+    print("="*70)
+    
+    # 1. Identificar meses a procesar
+    months_to_process = set()
     for record in weekly_data:
         monthYear = f"{record['year']}-{record['month']:02d}"
-        monthly_groups[monthYear].append(record)
-
-    # 2. Ordenar meses cronológicamente (importante para calcular las diferencias)
-    sorted_months = sorted(monthly_groups.keys())
-
-    print(f"Meses encontrados: {sorted_months}")
-
-    # 3. Calcular métricas para cada mes
+        months_to_process.add((monthYear, record['year'], record['month']))
+    
+    sorted_months = sorted(months_to_process)
+    print(f"Meses a recalcular: {[m[0] for m in sorted_months]}\n")
+    
     monthly_metrics = []
     previous_max_temp = None
-
-    for monthYear in sorted_months:
-        records = monthly_groups[monthYear]
-
-        # Calcular métricas del mes
-        max_deviation = max(r["desviacion"] for r in records)
-        max_temperature = max(r["media"] for r in records)
-        
-        # 1. Obtener la máxima temperatura del mes actual de la BD
-        max_temp_db = get_current_month_max_temp(records[0]['year'], records[0]['month']) 
-        if max_temp_db is not None:
-            # Siempre tomar el máximo entre BD y CSV
-            max_temperature = max(max_temperature, max_temp_db)
-        # 2. Intentar obtener max_temp del mes anterior de la variable local (si venía en el mismo CSV)
-        prev_max_db = None
     
-        # 3. Si no está en local, buscar en DynamoDB (caso de subida incremental)
+    for monthYear, year, month in sorted_months:
+        print(f"• Procesando {monthYear}...")
+        
+        # 2. Obtener el primer y último día del mes
+        if month == 12:
+            next_month = 1
+            next_year = year + 1
+        else:
+            next_month = month + 1
+            next_year = year
+        
+        start_date = f"{year}-{month:02d}-01"
+        end_date = f"{next_year}-{next_month:02d}-01"
+        
+        # 3. Consultar TODOS los registros semanales del mes desde DynamoDB
+        weekly_records = []
+        
+        try:
+            # Escanear todas las fechas del mes
+            response = table.scan(
+                FilterExpression="metric_type = :mt AND monthYear >= :start AND monthYear < :end",
+                ExpressionAttributeValues={
+                    ':mt': 'weekly',
+                    ':start': start_date,
+                    ':end': end_date
+                }
+            )
+            weekly_records = response.get('Items', [])
+            
+        except Exception as e:
+            print(f"  ⚠️ Error consultando datos: {e}")
+            continue
+        
+        if not weekly_records:
+            print(f"  ⚠️ No hay registros únicos para {monthYear}")
+            continue
+        
+        print(f"  📊 Registros únicos encontrados: {len(weekly_records)}")
+        
+        # 4. Calcular métricas sobre datos únicos
+        temperatures = [float(r['temperature']) for r in weekly_records]
+        deviations = [float(r['deviation']) for r in weekly_records]
+        
+        max_deviation = max(deviations)
+        avg_temperature = sum(temperatures) / len(temperatures)
+        max_temperature = max(temperatures)
+        total_sum = sum(temperatures)
+        total_count = len(weekly_records)
+        
+        # 5. Calcular diferencia con mes anterior
         if previous_max_temp is None:
-            prev_max_db = get_previous_month_max_temp(records[0]['year'], records[0]['month'])
+            # Buscar en DynamoDB
+            prev_max_db = get_previous_month_max_temp(year, month)
+            temp_diff = max_temperature - prev_max_db if prev_max_db else 0.0
         else:
-            prev_max_db = previous_max_temp
-
-        # 4. Calcular diferencia
-        if prev_max_db is not None:
-            temp_diff = max_temperature - prev_max_db
-        else:
-            temp_diff = 0.0 # Es el primer dato histórico que tenemos
-
-        # 5. Calcular media mensual correctamente
-        curr_sum_db, curr_rec_db = get_current_month_avg_temp(records[0]['year'], records[0]['month'])
+            temp_diff = max_temperature - previous_max_temp
         
-        # Suma de las nuevas temperaturas
-        new_sum = sum(r["media"] for r in records)
-        new_count = len(records)
+        monthly_metrics.append({
+            'monthYear': monthYear,
+            'max_deviation': max_deviation,
+            'avg_temperature': avg_temperature,
+            'max_temperature': max_temperature,
+            'temp_diff': temp_diff,
+            'record_count': total_count,
+            'sum_temp': total_sum,
+        })
         
-        if curr_sum_db is not None and curr_rec_db is not None:
-            # Acumular con datos existentes
-            total_sum = new_sum + curr_sum_db
-            total_count = new_count + curr_rec_db
-            avg_temperature = total_sum / total_count
-        else:
-            # Primera vez para este mes
-            total_sum = new_sum
-            total_count = new_count
-            avg_temperature = new_sum / new_count
-
-        # 6. Calcular maxima desviacion
-        max_sd_db = get_current_month_max_sd(records[0]['year'], records[0]['month']) 
-        if max_sd_db is not None:
-            if max_sd_db > max_deviation:
-                max_deviation = max_sd_db
-
-        monthly_metrics.append(
-            {
-                "monthYear": monthYear,
-                "max_deviation": max_deviation,
-                "avg_temperature": avg_temperature,
-                "max_temperature": max_temperature,
-                "temp_diff": temp_diff,
-                "record_count": int(total_count),
-                "sum_temp": total_sum,
-            }
-        )
-
         # Logging detallado
-        print(f"• {monthYear}")
-        print(f"\t- Max desviación: {max_deviation:.4f}ºC")
-        print(f"\t- Temp media:     {avg_temperature:.2f}ºC")
-        print(f"\t- Temp máxima:    {max_temperature:.2f}ºC")
-        print(f"\t- Diferencia:     {temp_diff:+.2f}ºC")
-        print(f"\t- Registros:      {len(records)}")
-
-        # Actualizar para próxima iteración
+        print(f"  ├─ Max desviación: {max_deviation:.4f}°C")
+        print(f"  ├─ Temp media:     {avg_temperature:.2f}°C")
+        print(f"  ├─ Temp máxima:    {max_temperature:.2f}°C")
+        print(f"  ├─ Diferencia:     {temp_diff:+.2f}°C")
+        print(f"  └─ Registros:      {total_count}\n")
+        
         previous_max_temp = max_temperature
-
-    print(f"Total meses procesados: {len(monthly_metrics)}")
-
+    
+    print(f"✓ Total meses recalculados: {len(monthly_metrics)}")
+    print("="*70)
     return monthly_metrics
 
 
 # ============================================================================
-# FUNCIONES DE ALMACENAMIENTO
+# FUNCIONES DE ALMACENAMIENTO DE MÉTRICAS AGREGADAS
 # ============================================================================
 
 
-def store_in_dynamodb(monthly_metrics: list):
+def store_monthly_metrics(monthly_metrics: list):
     """
-    Almacena las métricas mensuales en DynamoDB con actualizaciones atómicas.
-    Previene race conditions en subidas concurrentes.
-
+    Almacena las métricas mensuales AGREGADAS en DynamoDB.
+    Sobrescribe completamente los valores porque ya fueron calculados
+    desde datos únicos.
+    
     Estructura de la tabla:
         - PK: monthYear (ej: "2017-03")
         - SK: metric_type (ej: "temp", "sd", "maxdiff")
         - Atributos: value, max_temp, sum_temp, last_updated, record_count
-
+    
     Args:
         monthly_metrics: Lista con métricas mensuales calculadas
     """
-    print("Almacenando datos en DynamoDB con actualizaciones atómicas...")
-
+    print("\n" + "="*70)
+    print("ALMACENANDO MÉTRICAS MENSUALES AGREGADAS")
+    print("="*70)
+    
     timestamp = datetime.now().isoformat()
     total_updates = 0
 
     for metrics in monthly_metrics:
         monthYear = metrics["monthYear"]
 
-        # Convertir floats a Decimal (requerido por DynamoDB)
+        # Convertir a Decimal
         max_dev_decimal = Decimal(str(metrics["max_deviation"]))
         avg_temp_decimal = Decimal(str(metrics["avg_temperature"]))
         max_temp_decimal = Decimal(str(metrics["max_temperature"]))
         temp_diff_decimal = Decimal(str(metrics["temp_diff"]))
         sum_temp_decimal = Decimal(str(metrics["sum_temp"]))
+        record_count = metrics["record_count"]
+
+        try:
+            # Sobrescribir todas las métricas (ya están calculadas correctamente)
+            
+            # 1. Máxima desviación (sd)
+            table.put_item(
+                Item={
+                    "monthYear": monthYear,
+                    "metric_type": "sd",
+                    "value": max_dev_decimal,
+                    "last_updated": timestamp,
+                    "record_count": record_count,
+                }
+            )
+
+            # 2. Temperatura media mensual (temp)
+            table.put_item(
+                Item={
+                    "monthYear": monthYear,
+                    "metric_type": "temp",
+                    "value": avg_temp_decimal,
+                    "max_temp": max_temp_decimal,
+                    "sum_temp": sum_temp_decimal,
+                    "last_updated": timestamp,
+                    "record_count": record_count,
+                }
+            )
+
+            # 3. Diferencia máxima temperatura (maxdiff)
+            table.put_item(
+                Item={
+                    "monthYear": monthYear,
+                    "metric_type": "maxdiff",
+                    "value": temp_diff_decimal,
+                    "max_temp": max_temp_decimal,
+                    "last_updated": timestamp,
+                    "record_count": record_count,
+                }
+            )
+
+            total_updates += 3
+            print(f"  ✓ {monthYear}: 3 métricas almacenadas")
+
+        except Exception as e:
+            print(f"  ✗ ERROR almacenando {monthYear}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        print(f"\n✓ Total actualizaciones: {total_updates}")
+        print("="*70)
         record_count = metrics["record_count"]
 
         try:
@@ -644,11 +780,12 @@ def store_in_dynamodb(monthly_metrics: list):
             print(f"✓ {monthYear}: 3 métricas almacenadas/actualizadas")
 
         except Exception as e:
-            print(f"✗ ERROR almacenando {monthYear}: {str(e)}")
+            print(f"  ✗ ERROR almacenando {monthYear}: {str(e)}")
             import traceback
             traceback.print_exc()
 
-    print(f"Total actualizaciones en DynamoDB: {total_updates}")
+    print(f"\n✓ Total actualizaciones: {total_updates}")
+    print("="*70)
 
 # ============================================================================
 # FUNCIÓN PARA TESTING LOCAL
