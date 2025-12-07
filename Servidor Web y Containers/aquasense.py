@@ -272,7 +272,7 @@ def get_maxdiff():
 
         # Consultar DynamoDB
         response = table.get_item(
-            key={"month_year": month_year, "metric_type": "maxdiff"}
+            Key={"monthYear": month_year, "metric_type": "maxdiff"}
         )
 
         # Verificar si existe el registro
@@ -339,7 +339,7 @@ def get_sd():
         logger.info(f"📊 Consultando sd: {month_year}")
 
         # Consultar DynamoDB
-        response = table.get_item(Key={"month_year": month_year, "metric_type": "sd"})
+        response = table.get_item(Key={"monthYear": month_year, "metric_type": "sd"})
 
         # Verificar si existe el registro
         if "Item" not in response:
@@ -405,7 +405,7 @@ def get_temp():
         logger.info(f"Consultando temp: {month_year}")
 
         # Consultar DynamoDB
-        response = table.get_item(Key={"month_year": month_year, "metric_type": "temp"})
+        response = table.get_item(Key={"monthYear": month_year, "metric_type": "temp"})
 
         # Verificar si existe el registro
         if "Item" not in response:
@@ -421,15 +421,31 @@ def get_temp():
 
         # Preparar respuesta
         item = decimal_to_float(response["Item"])
-
-        result = {
-            "month": month,
-            "year": year,
-            "temp": item["value"],
-            "max_temp": item.get("max_temp"),
-            "last_updated": item.get("last_updated"),
-            "record_count": item.get("record_count"),
-        }
+        
+        # Manejo de items legacy sin sum_temp
+        # Si el item no tiene sum_temp, es un registro antiguo
+        if 'sum_temp' not in item:
+            logger.info(f"⚠️  Item legacy detectado para {month_year} (sin sum_temp)")
+            # Para items legacy, usamos los valores tal como están
+            result = {
+                "month": month,
+                "year": year,
+                "temp": item["value"],
+                "max_temp": item.get("max_temp"),
+                "last_updated": item.get("last_updated"),
+                "record_count": item.get("record_count", 1),
+                "legacy": True  # Indicador de item legacy
+            }
+        else:
+            # Item moderno con sum_temp
+            result = {
+                "month": month,
+                "year": year,
+                "temp": item["value"],
+                "max_temp": item.get("max_temp"),
+                "last_updated": item.get("last_updated"),
+                "record_count": item.get("record_count"),
+            }
 
         logger.info(f"Temp {month_year}: {item['value']}")
 
@@ -467,7 +483,7 @@ def get_available_months():
         # Agrupar por mes
         months_dict = {}
         for item in items:
-            month_year = item["month_year"]
+            month_year = item["monthYear"]
             metric_type = item["metric_type"]
 
             if month_year not in months_dict:
