@@ -42,13 +42,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: monthYear
           AttributeType: S 
-        - AttributeName: metric_type
-          AttributeType: S
       KeySchema:
         - AttributeName: monthYear
           KeyType: HASH
-        - AttributeName: metric_type
-          KeyType: RANGE
       ProvisionedThroughput:
         ReadCapacityUnits: 20 #!Ref ReadCapacityUnits
         WriteCapacityUnits: 20 
