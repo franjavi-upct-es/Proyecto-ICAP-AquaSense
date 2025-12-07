@@ -55,112 +55,58 @@ table = dynamodb.Table(DYNAMODB_TABLE)
 # ============================================================================
 
 def round_decimal(value):
-    """
-    Redondea un valor Decimal a 2 decimales para consistencia.
-    
-    Args:
-        value: Valor Decimal a redondear
-        
-    Returns:
-        Decimal redondeado a 2 decimales
-    """
+    """Redondea un valor Decimal a 2 decimales."""
     return value.quantize(Decimal("0.01"))
 
 def send_alert(fecha_str, desviacion, temp_media, filename):
-    """
-    Envía una alerta por SNS cuando se detecta una desviación alta.
-    
-    Requisito del proyecto:
-        "Necesitan saber cuándo la desviación de la temperatura semanal
-        del agua del Mar Menor es superior a 0.5°C"
-    
-    Args:
-        fecha_str: Fecha del registro en formato 'YYYY/MM/DD'
-        desviacion: Desviación detectada (Decimal)
-        temp_media: Temperatura media del registro (Decimal)
-        filename: Nombre del archivo CSV procesado
-    """
+    """Envía una alerta por SNS (Corregido error de sintaxis)."""
     try:
-        # Formatear fecha para el mensaje
         fecha_dt = datetime.strptime(fecha_str, '%Y/%m/%d')
         fecha_formatted = fecha_dt.strftime("%Y-%m-%d")
         
         subject = "⚠️ Alarma Mar Menor - Desviación Alta Detectada"
-
         message = f"""
 ⚠️ ALERTA DE TEMPERATURA - MAR MENOR
 =========================================
+Se ha detectado una desviación superior al umbral.
 
-Se ha detectado una desviación de temperatura superior al umbral establecido.
-
-📊 DETALLES DE LA ALERTA
+📊 DETALLES
 -----------------------------------------
-- Fecha del registro:   {fecha_formatted}
-- Desviación detectada: {float(desviacion):.4f}°C ⚠️
-- Umbral configurado:   {float(DEVIATION_THRESHOLD):.2f}°C
-- Temperatura media:    {float(temp_media):.2f}°C
-
-ℹ️ INFORMACIÓN ADICIONAL
------------------------------------------
-- Archivo procesado:    {filename}
-- Timestamp:            {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-- Sistema:              AquaSenseCloud Lambda Function
-
-🔍 INTERPRETACIÓN
------------------------------------------
-Una desviación de {float(desviacion):.4f}°C indica alta variabilidad en las
-temperaturas del agua. Posibles causas:
-  • Cambios climáticos bruscos
-  • Fenómenos meteorológicos
-  • Alteraciones en la laguna
-
-> Se recomienda revisar los datos semanales detallados.
+- Fecha:        {fecha_formatted}
+- Desviación:   {float(desviacion):.4f}°C ⚠️
+- Umbral:       {float(DEVIATION_THRESHOLD):.2f}°C
+- Temp Media:   {float(temp_media):.2f}°C
+- Archivo:      {filename}
 
 --
 Sistema AquaSenseCloud
-Infraestructuras para la Computación de Altas Prestaciones - UPCT
         """.strip()
 
-        response = sns_client.publish(
+        sns_client.publish(
             TopicArn=SNS_TOPIC_ARN, 
             Subject=subject, 
             Message=message
         )
-
-
     except Exception as e:
         print(f"Error enviando alerta SNS: {str(e)}")
+
 
 # ============================================================================
 # HANDLER PRINCIPAL
 # ============================================================================
 
 def lambda_handler(event, context):
-    """
-    Handler principal de la función Lambda.
-    
-    Se ejecuta automáticamente cuando se sube un archivo CSV a S3.
-    Procesa los datos, calcula métricas agregadas y actualiza DynamoDB.
-    
-    Args:
-        event: Evento de S3 con información del archivo subido
-        context: Contexto de ejecución de Lambda
-        
-    Returns:
-        dict: Respuesta con statusCode y mensaje de éxito/error
-    """
+    print("Event received: " + json.dumps(event, indent=2))
 
-    # Obtener información del archivo desde el evento S3
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
     local_filename = f"/tmp/{os.path.basename(key)}"
     
-
     try:
-        # Descargar el archivo desde S3
+        # Descargar
         s3_client.download_file(bucket, key, local_filename)
 
-        # Procesar el archivo CSV
+        # Procesar CSV
         with open(local_filename, encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter=',')
             data = {}
@@ -170,74 +116,72 @@ def lambda_handler(event, context):
             for row in reader:
                 total_rows += 1
                 
-                # Parseo de datos con soporte para múltiples formatos de fecha
+                # Parseo de fecha
                 try:
                     fecha = datetime.strptime(row['Fecha'], '%Y/%m/%d')
                 except ValueError:
-                    # Formato alternativo YYYY-MM-DD
                     fecha = datetime.strptime(row['Fecha'], '%Y-%m-%d')
                 
-                # Clave mensual en formato YYYY-MM
-                mes = fecha.strftime('%Y-%m')
+                mes = fecha.strftime('%Y-%m') # Clave PK
                 
-                # Convertir valores a Decimal y redondear
                 temp_media = round_decimal(Decimal(row['Medias']))
                 desviacion = round_decimal(Decimal(row['Desviaciones']))
 
-                # Agregación en memoria por mes
+                # Agregación en memoria
                 if mes not in data:
                     data[mes] = {
                         'max_temp': temp_media,
                         'max_sd': desviacion,
                         'mean_temp_sum': temp_media,
-                        'mean_temp_count': 1,
-                        'records': [(fecha, temp_media, desviacion)]
+                        'mean_temp_count': 1
                     }
                 else:
                     data[mes]['max_temp'] = max(data[mes]['max_temp'], temp_media)
                     data[mes]['max_sd'] = max(data[mes]['max_sd'], desviacion)
                     data[mes]['mean_temp_sum'] += temp_media
                     data[mes]['mean_temp_count'] += 1
-                    data[mes]['records'].append((fecha, temp_media, desviacion))
 
-                # Verificar si la desviación supera el umbral y enviar alerta
+                # Alertas
                 if desviacion > DEVIATION_THRESHOLD:
-                    send_alert(
-                        fecha.strftime('%Y/%m/%d'), 
-                        desviacion,
-                        temp_media,
-                        key
-                    )
+                    send_alert(fecha.strftime('%Y/%m/%d'), desviacion, temp_media, key)
                     alerts_sent += 1
 
-            # Procesar y actualizar DynamoDB con datos combinados
+            # Actualizar DynamoDB (SOBREESCRITURA)
             updated_months = 0
             
             for mes, metrics in data.items():
                 try:
-                    # Calcular mes anterior para max_diff_temp
+                    # Cálculo directo de la media del mes actual (sin datos históricos)
+                    current_mean_temp = round_decimal(metrics['mean_temp_sum'] / metrics['mean_temp_count'])
+
                     current_month_dt = datetime.strptime(mes, '%Y-%m')
                     previous_month_dt = current_month_dt.replace(day=1) - timedelta(days=1)
                     previous_month = previous_month_dt.strftime('%Y-%m')
 
-                    # Obtener max_temp del mes anterior
+                    # 1. Buscar mes anterior en DB
                     previous_item_resp = table.get_item(Key={'monthYear': previous_month})
                     previous_item = previous_item_resp.get('Item', {})
-                    previous_max_temp = Decimal(previous_item.get('max_temp', 0))
+                    prev_max_db = Decimal(previous_item.get('max_temp', 0))
 
-                    # Calcular media del mes (sin combinar con datos anteriores)
-                    mean_temp = round_decimal(metrics['mean_temp_sum'] / metrics['mean_temp_count'])
+                    # 2. Buscar mes anterior en el archivo actual
+                    if previous_month in data:
+                        prev_max_file = data[previous_month]['max_temp']
+                    else:
+                        prev_max_file = Decimal(0)
                     
-                    # Diferencia con mes anterior
-                    max_diff_temp = round_decimal(metrics['max_temp'] - previous_max_temp)
+                    # El máximo real del mes anterior es el mayor entre DB y File
+                    previous_max_final = max(prev_max_db, prev_max_file)
 
-                    # SOBREESCRIBIR completamente (sin combinar con datos existentes)
+                    # Diferencia con el mes anterior
+                    max_diff_temp = round_decimal(metrics['max_temp'] - previous_max_final)
+
+                    # Guardar item (SOBRESCRIBE la fila existente para este mes)
                     table.put_item(
                         Item={
                             'monthYear': mes,
                             'max_temp': metrics['max_temp'],
                             'max_sd': metrics['max_sd'],
-                            'mean_temp': mean_temp,
+                            'mean_temp': current_mean_temp,
                             'max_diff_temp': max_diff_temp,
                             'mean_temp_count': metrics['mean_temp_count'],
                             'last_updated': datetime.now().isoformat()
@@ -246,8 +190,8 @@ def lambda_handler(event, context):
                     updated_months += 1
 
                 except Exception as e:
+                    print(f"Error updating month {mes}: {e}")
                     raise
-            
             
             return {
                 "statusCode": 200,
@@ -261,13 +205,10 @@ def lambda_handler(event, context):
             }
 
     except Exception as e:
-        
         import traceback
         traceback.print_exc()
-        
         raise Exception(f"Error processing file {key} from bucket {bucket}: {str(e)}")
     
     finally:
-        # Limpiar el archivo temporal
         if os.path.exists(local_filename):
             os.remove(local_filename)
