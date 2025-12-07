@@ -533,8 +533,8 @@ def calculate_monthly_metrics_from_db(weekly_data: list) -> list:
             next_month = month + 1
             next_year = year
         
-        start_date = f"{year}-{month:02d}-01"
-        end_date = f"{next_year}-{next_month:02d}-01"
+        start_date = f"{year}-{month:02d}-03"
+        end_date = f"{next_year}-{next_month:02d}-04"
         
         # 3. Consultar TODOS los registros semanales del mes desde DynamoDB
         weekly_records = []
