@@ -129,6 +129,7 @@ Infraestructuras para la Computación de Altas Prestaciones - UPCT
 
 
     except Exception as e:
+        print(f"Error enviando alerta SNS: {str(e)}")
 
 # ============================================================================
 # HANDLER PRINCIPAL
