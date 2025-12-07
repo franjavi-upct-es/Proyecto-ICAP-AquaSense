@@ -13,7 +13,7 @@
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \renewcommand*\contentsname{\color{black}Índice} 
 \title{Infraestructura para la Computación de Altas Prestaciones\\Proyecto Final: AquaSenseCloud}
-\author{Francisco Javier Mercader Martínez\\Javier Moreno\\Pablo Meseguer}
+\author{Francisco Javier Mercader Martínez\\Javier Moreno Pagán\\Pablo Meseguer Domenech}
 \date{Curso: 2024/2025}
 
 \begin{document}
@@ -63,11 +63,13 @@
 	5 de diciembre       & \textbf{Entrega Final:} Recopilación de entregables, preparación de material de defensa y envío del proyecto.                                                   & Todo el Equipo       & 1 día             \\
 	\hline
 \end{longtable}
-\newpage
+
 \section{Diagrama Arquitectura de la solución}
 \begin{center}
 	\includegraphics[width=0.7\textwidth]{estructuras/Estructura AWS}
 \end{center}
+
+\newpage
 \section{Listado de Recursos y Servicios con su funcionalidad}
 \begin{enumerate}[label=\textbf{\arabic*.}]
 	\item \textbf{Ingesta y almacenamiento}
@@ -153,26 +155,73 @@
 	\begin{figure}[h]
 		\centering
 		\includegraphics[width=0.5\linewidth]{imgs/screenshot002}
-		\caption{Ejemplo: Contenido del fichero: "\texttt{\textbf{temperatura\_1.csv}}"}
+		\caption{Contenido del fichero: "\texttt{\textbf{temperatura\_1.csv}}"}
 		\label{fig:screenshot002}
+	\end{figure}
+	
+	\pagebreak
+	
+	\begin{figure}
+		\centering
+		\includegraphics[width=\linewidth]{imgs/screenshot004}
+		\caption{Almacenamiento de datos transformados en DynamoDB}
+		\label{fig:screenshot004}
 	\end{figure}
 	
 	\underline{\textbf{Nota:}} Observar que la función lambda trata con la posibilidad de ingesta de datos sin importar los siguientes factores: su orden temporal, su repetición y datos mensuales separados en distintos ficheros.
 	
 	\textbf{Comentar también que los datos transformados se almacenan en la tabla de DynamoDB correctamente si se realiza la ingesta de manera controlada y con ficheros de un tamaño medio (2-3 Kbytes) como los utilizados en las pruebas realizadas.}
-	
+
 	\begin{figure}[h]
 		\centering
-		\includegraphics[width=\linewidth]{imgs/screenshot003}
+		\includegraphics[width=0.8\linewidth]{imgs/screenshot003}
 		\caption{Envío de correo a los analistas mediante un tópico definido mediante AWS SNS}
 	\end{figure}
 	
 	
 	\item \textbf{ECR:}
+	
+	\begin{center}
+		\includegraphics[width=\linewidth]{imgs/screenshot005}
+		
+	\end{center}
+	
+	
 	\item \textbf{Automatización del aprovisionamiento de la infraestructura mediante CloudFormation:}
-	\item \textbf{Auto Escalado con métricas de utilización de recursos:}
+	
+	\begin{center}
+		\includegraphics[width=\linewidth]{imgs/screenshot006}\\
+		\includegraphics[width=\linewidth]{imgs/screenshot007}\\
+		\includegraphics[width=\linewidth]{imgs/screenshot008}\\
+	\end{center}
+
 	\item \textbf{Funcionamiento de la aplicación:}
 
 	      Distintas consultas que pueden realizar los analistas a través del servidor web desplegado por las tareas. En la propia URL definen el tipo de dato a consultar con su mes y año específico, además del correcto funcionamiento de la aplicación con el endpoint \textbf{\texttt{/health}}.
+	      \pagebreak
+	      \begin{center}
+	      	\textbf{\texttt{health/}}
+	      	
+	      	\includegraphics[width=\linewidth]{imgs/screenshot009}\\
+	      	
+	      	\textbf{\texttt{maxdiff/}}
+	      	
+	      	\includegraphics[width=\linewidth]{imgs/screenshot010}\\
+	      	
+	      	\textbf{\texttt{months/}}
+	      	
+	      	\includegraphics[width=\linewidth]{imgs/screenshot011}\\
+	      	
+	      	\textbf{\texttt{sd/}}
+	      	
+	      	\includegraphics[width=\linewidth]{imgs/screenshot012}\\
+	      	
+	      \pagebreak
+	      	
+	      	\textbf{\texttt{temp/}}
+	      	
+	      	\includegraphics[width=\linewidth]{imgs/screenshot013}\\
+	      \end{center}
+	      
 \end{itemize}
 \end{document}
