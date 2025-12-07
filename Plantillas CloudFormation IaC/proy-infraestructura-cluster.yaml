@@ -2,15 +2,12 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Plantilla que crea la infraestructura ECS EC2 con awsvpc
 
 Parameters:
-
   NetworkStackName:
     Description: Nombre de la pila de infraestructura base
     Type: String
     Default: proy-infraestructura-soporte
 
-
 Resources:
-
   ###################
   # ECS Cluster
   ###################
@@ -22,16 +19,15 @@ Resources:
   ECSLaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}'
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id}}"
       InstanceType: t3.micro
       IamInstanceProfile: LabInstanceProfile
-      SecurityGroups: 
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-PrivateFlaskSG"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config  
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
 
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -40,17 +36,13 @@ Resources:
       MaxSize: 5
       DesiredCapacity: 3
       VPCZoneIdentifier:
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-PrivateSubnet1Id"
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-PrivateSubnet2Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
       LaunchConfigurationName: !Ref ECSLaunchConfiguration
       Tags:
         - Key: Name
           Value: proy-ECS-I
           PropagateAtLaunch: true
-
-
 
   ###################################
   # Load Balancer
@@ -60,13 +52,10 @@ Resources:
     Properties:
       Name: proy-marmenor-alb
       Subnets:
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-PublicSubnet1Id"
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-PublicSubnet2Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet1Id"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet2Id"
       SecurityGroups:
-        - Fn::ImportValue: 
-            !Sub "${NetworkStackName}-ALBSecurityGroup"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-ALBSecurityGroup"
       Scheme: internet-facing
       Type: application
 
@@ -78,21 +67,19 @@ Resources:
     Properties:
       Name: proy-tg
       VpcId:
-        Fn::ImportValue: 
-          !Sub "${NetworkStackName}-VPCId"
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCId"
       Port: 8080
       Protocol: HTTP
       TargetType: ip
       HealthCheckPath: /health
-      HealthCheckPort: '8080'
+      HealthCheckPort: "8080"
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: '200'
-
+        HttpCode: "200"
 
   ###################################
   # Listener
@@ -108,7 +95,7 @@ Resources:
           TargetGroupArn: !Ref ECSTargetGroup
 
   ###################################
-  # Task 
+  # Task
   ###################################
   ECSTaskDefinitionEC2:
     Type: AWS::ECS::TaskDefinition
@@ -136,15 +123,15 @@ Resources:
               Value: !Ref AWS::Region
           Essential: true
           HealthCheck:
-            Command: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+            Command:
+              ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
             Interval: 30
             Timeout: 10
             Retries: 5
             StartPeriod: 60
 
-
   ###################################
-  # ECS Service 
+  # ECS Service
   ###################################
   ECSServiceEC2:
     Type: AWS::ECS::Service
@@ -158,14 +145,48 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           Subnets:
-            - Fn::ImportValue: 
-                !Sub "${NetworkStackName}-PrivateSubnet1Id"
-            - Fn::ImportValue: 
-                !Sub "${NetworkStackName}-PrivateSubnet2Id"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1Id"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2Id"
           SecurityGroups:
-            - Fn::ImportValue: 
-                !Sub "${NetworkStackName}-PrivateFlaskSG"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateFlaskSG"
       LoadBalancers:
         - ContainerName: proy-aquasense-api
           ContainerPort: 8080
           TargetGroupArn: !Ref ECSTargetGroup
+
+######################
+# Outputs section
+######################
+
+Outputs:
+  LoadBalancerURL:
+    Description: URL del Application Load Balancer para acceder a la API de AquaSense
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-LoadBalancerURL"
+
+  APIEndpointTemp:
+    Description: Endpoint para consultar temperatura media mensual
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/temp?month=3&year=2017"
+
+  APIEndpointSD:
+    Description: Endpoint para consultar desviación estándar máxima mensual
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/sd?month=3&year=2017"
+
+  APIEndpointMaxDiff:
+    Description: Endpoint para consultar diferencia de temperatura máxima mensual
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/maxdiff?month=4&year=2017"
+
+  APIEndpointMonths:
+    Description: Endpoint para listar todos los meses disponibles
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/months"
+
+  APIEndpointHealth:
+    Description: Endpoint de health check del servicio
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}/health"
+
+  LoadBalancerDNS:
+    Description: DNS del Load Balancer (sin protocolo)
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}-LoadBalancerDNS"
