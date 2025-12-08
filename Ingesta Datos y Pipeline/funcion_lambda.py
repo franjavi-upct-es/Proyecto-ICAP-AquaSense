@@ -15,6 +15,7 @@ Funcionalidades:
     - Detección de alarmas (desviación > 0.5ºC)
     - Actualización de DynamoDB con datos procesados
     - Envió de notificaciones SNS
+    - Ajuste de mes: si el día es <= 3, se asigna al mes anterior
 
 Triggers:
     - S3 ObjectCreated:* en bucket proy-marmenor-data-raw-*
@@ -57,8 +58,26 @@ table = dynamodb.Table(DYNAMODB_TABLE)
 # ============================================================================
 
 def round_decimal(value):
-    """Redondea un valor Decimal a 2 decimales."""
-    return value.quantize(Decimal("0.01"))
+    """Redondea un valor Decimal a 4 decimales."""
+    return value.quantize(Decimal("0.0001"))
+
+def adjust_month_for_date(fecha_dt):
+    """
+    Ajusta el mes de una fecha según el día.
+    Si el día es <= 3, se asigna al mes anterior.
+    
+    Args:
+        fecha_dt: datetime object
+    
+    Returns:
+        str: Mes en formato 'YYYY-MM' ajustado
+    """
+    if fecha_dt.day <= 3:
+        # Mover al mes anterior
+        adjusted_date = fecha_dt.replace(day=1) - timedelta(days=1)
+        return adjusted_date.strftime('%Y-%m')
+    else:
+        return fecha_dt.strftime('%Y-%m')
 
 def send_alert(fecha_str, desviacion, temp_media, filename):
     """Envía una alerta por SNS."""
@@ -107,7 +126,6 @@ def get_all_csv_files(bucket):
             if obj['Key'].lower().endswith('.csv')
         ])
         
-        print(f"Found {len(csv_files)} CSV files in bucket: {csv_files}")
         return csv_files
         
     except Exception as e:
@@ -118,14 +136,13 @@ def get_all_csv_files(bucket):
 def process_csv_file(bucket, key, local_dir):
     """
     Descarga y procesa un archivo CSV.
-    Retorna diccionario de fechas: {'2023-01-15': {'temp': 20, 'sd': 0.5, 'source': 'file.csv'}}
+    Retorna diccionario de fechas: {'2023-01-15': {'temp': 20, 'sd': 0.5, 'source': 'file.csv', 'adjusted_month': '2023-01'}}
     """
     local_filename = os.path.join(local_dir, os.path.basename(key))
     daily_data = {}
     
     try:
         s3_client.download_file(bucket, key, local_filename)
-        print(f"Processing file: {key}")
         
         with open(local_filename, encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter=',')
@@ -144,12 +161,16 @@ def process_csv_file(bucket, key, local_dir):
                 fecha_str = fecha.strftime('%Y-%m-%d')
                 temp_media = round_decimal(Decimal(row['Medias']))
                 desviacion = round_decimal(Decimal(row['Desviaciones']))
+                
+                # Ajustar mes según el día (si día <= 3, va al mes anterior)
+                adjusted_month = adjust_month_for_date(fecha)
 
                 # Guardar (sobrescribe si ya existe en este archivo)
                 daily_data[fecha_str] = {
                     'temp': temp_media,
                     'sd': desviacion,
-                    'source': key
+                    'source': key,
+                    'adjusted_month': adjusted_month  # Mes ajustado
                 }
         
         return daily_data
@@ -168,7 +189,6 @@ def process_csv_file(bucket, key, local_dir):
 # ============================================================================
 
 def lambda_handler(event, context):
-    print("Event received: " + json.dumps(event, indent=2))
 
     bucket = event['Records'][0]['s3']['bucket']['name']
     trigger_key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
@@ -176,11 +196,6 @@ def lambda_handler(event, context):
     local_dir = "/tmp"
     
     try:
-        print(f"\n{'='*70}")
-        print(f"TRIGGERED BY: {trigger_key}")
-        print(f"PROCESSING ALL CSV FILES IN BUCKET: {bucket}")
-        print(f"{'='*70}\n")
-        
         # ============================================================
         # PASO 1: Obtener TODOS los archivos CSV del bucket
         # ============================================================
@@ -198,10 +213,11 @@ def lambda_handler(event, context):
         # ============================================================
         # PASO 2: Procesar todos los archivos y fusionar datos
         # ============================================================
-        merged_daily_data = {}  # {'2023-01-15': {'temp': 20, 'sd': 0.5, 'source': 'file.csv'}}
+        merged_daily_data = {}  # {'2023-01-15': {'temp': 20, 'sd': 0.5, 'source': 'file.csv', 'adjusted_month': '2023-01'}}
         alerts_sent = 0
         total_rows = 0
         files_processed = 0
+        month_adjustments = 0  # Contador de fechas ajustadas
         
         for csv_key in all_csv_files:
             file_data = process_csv_file(bucket, csv_key, local_dir)
@@ -212,8 +228,12 @@ def lambda_handler(event, context):
                 
                 # Fusionar: última aparición sobrescribe
                 for fecha, data in file_data.items():
-                    if fecha in merged_daily_data:
-                        print(f"  → Duplicate date {fecha}: overwriting {merged_daily_data[fecha]['source']} with {csv_key}")
+
+                    # Verificar si se ajustó el mes
+                    fecha_dt = datetime.strptime(fecha, '%Y-%m-%d')
+                    original_month = fecha_dt.strftime('%Y-%m')
+                    if data['adjusted_month'] != original_month:
+                        month_adjustments += 1
                     
                     merged_daily_data[fecha] = data
                     
@@ -223,19 +243,15 @@ def lambda_handler(event, context):
                         alerts_sent += 1
         
         duplicates_found = total_rows - len(merged_daily_data)
-        print(f"\n📊 Merge complete:")
-        print(f"   Files processed: {files_processed}")
-        print(f"   Total rows: {total_rows}")
-        print(f"   Unique dates: {len(merged_daily_data)}")
-        print(f"   Duplicates overwritten: {duplicates_found}")
         
         # ============================================================
-        # PASO 3: Agrupar por mes y calcular métricas
+        # PASO 3: Agrupar por mes AJUSTADO y calcular métricas
         # ============================================================
         monthly_data = defaultdict(dict)  # {'2023-01': {'2023-01-05': {...}, ...}}
         
         for fecha_str, data in merged_daily_data.items():
-            mes = fecha_str[:7]  # '2023-01'
+            # Usar el mes ajustado en lugar del mes natural
+            mes = data['adjusted_month']
             monthly_data[mes][fecha_str] = data
         
         # ============================================================
@@ -283,8 +299,7 @@ def lambda_handler(event, context):
                         'last_updated': datetime.now().isoformat()
                     }
                 )
-                
-                print(f"✓ Updated month {mes}: {count} records, mean={float(mean_temp):.2f}°C")
+
                 updated_months += 1
 
             except Exception as e:
@@ -300,6 +315,7 @@ def lambda_handler(event, context):
                 "total_rows": total_rows,
                 "unique_dates": len(merged_daily_data),
                 "duplicates_overwritten": duplicates_found,
+                "month_adjustments": month_adjustments,
                 "months_updated": updated_months,
                 "alerts_sent": alerts_sent
             })
