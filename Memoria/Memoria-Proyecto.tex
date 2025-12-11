@@ -147,81 +147,347 @@
 \section{Ejemplos de demostración de correcta funcionalidad}
 \begin{itemize}[label=\textbullet]
 	\item \textbf{Función Lambda:}
-	
-	\begin{center}
-		\includegraphics[width=\textwidth]{imgs/screenshot001}
-	\end{center}
-	
-	\begin{figure}[h]
-		\centering
-		\includegraphics[width=0.5\linewidth]{imgs/screenshot002}
-		\caption{Contenido del fichero: "\texttt{\textbf{temperatura\_1.csv}}"}
-		\label{fig:screenshot002}
-	\end{figure}
-	
-	\pagebreak
-	
-	\begin{figure}
-		\centering
-		\includegraphics[width=\linewidth]{imgs/screenshot004}
-		\caption{Almacenamiento de datos transformados en DynamoDB}
-		\label{fig:screenshot004}
-	\end{figure}
-	
-	\underline{\textbf{Nota:}} Observar que la función lambda trata con la posibilidad de ingesta de datos sin importar los siguientes factores: su orden temporal, su repetición y datos mensuales separados en distintos ficheros.
-	
-	\textbf{Comentar también que los datos transformados se almacenan en la tabla de DynamoDB correctamente si se realiza la ingesta de manera controlada y con ficheros de un tamaño medio (2-3 Kbytes) como los utilizados en las pruebas realizadas.}
 
-	\begin{figure}[h]
-		\centering
-		\includegraphics[width=0.8\linewidth]{imgs/screenshot003}
-		\caption{Envío de correo a los analistas mediante un tópico definido mediante AWS SNS}
-	\end{figure}
-	
-	
+	      \begin{center}
+		      \includegraphics[width=\textwidth]{imgs/screenshot001}
+	      \end{center}
+
+	      \begin{figure}[h]
+		      \centering
+		      \includegraphics[width=0.5\linewidth]{imgs/screenshot002}
+		      \caption{Contenido del fichero: "\texttt{\textbf{temperatura\_1.csv}}"}
+		      \label{fig:screenshot002}
+	      \end{figure}
+
+	      \pagebreak
+
+	      \begin{figure}
+		      \centering
+		      \includegraphics[width=\linewidth]{imgs/screenshot004}
+		      \caption{Almacenamiento de datos transformados en DynamoDB}
+		      \label{fig:screenshot004}
+	      \end{figure}
+
+	      \underline{\textbf{Nota:}} Observar que la función lambda trata con la posibilidad de ingesta de datos sin importar los siguientes factores: su orden temporal, su repetición y datos mensuales separados en distintos ficheros.
+
+	      \textbf{Comentar también que los datos transformados se almacenan en la tabla de DynamoDB correctamente si se realiza la ingesta de manera controlada y con ficheros de un tamaño medio (2-3 Kbytes) como los utilizados en las pruebas realizadas.}
+
+	      \begin{figure}[h]
+		      \centering
+		      \includegraphics[width=0.8\linewidth]{imgs/screenshot003}
+		      \caption{Envío de correo a los analistas mediante un tópico definido mediante AWS SNS}
+	      \end{figure}
+
+
 	\item \textbf{ECR:}
-	
-	\begin{center}
-		\includegraphics[width=\linewidth]{imgs/screenshot005}
-		
-	\end{center}
-	
-	
+
+	      \begin{center}
+		      \includegraphics[width=\linewidth]{imgs/screenshot005}
+
+	      \end{center}
+
+
 	\item \textbf{Automatización del aprovisionamiento de la infraestructura mediante CloudFormation:}
-	
-	\begin{center}
-		\includegraphics[width=\linewidth]{imgs/screenshot006}\\
-		\includegraphics[width=\linewidth]{imgs/screenshot007}\\
-		\includegraphics[width=\linewidth]{imgs/screenshot008}\\
-	\end{center}
+
+	      \begin{center}
+		      \includegraphics[width=\linewidth]{imgs/screenshot006}\\
+		      \includegraphics[width=\linewidth]{imgs/screenshot007}\\
+		      \includegraphics[width=\linewidth]{imgs/screenshot008}\\
+	      \end{center}
 
 	\item \textbf{Funcionamiento de la aplicación:}
 
 	      Distintas consultas que pueden realizar los analistas a través del servidor web desplegado por las tareas. En la propia URL definen el tipo de dato a consultar con su mes y año específico, además del correcto funcionamiento de la aplicación con el endpoint \textbf{\texttt{/health}}.
 	      \pagebreak
 	      \begin{center}
-	      	\textbf{\texttt{health/}}
-	      	
-	      	\includegraphics[width=\linewidth]{imgs/screenshot009}\\
-	      	
-	      	\textbf{\texttt{maxdiff/}}
-	      	
-	      	\includegraphics[width=\linewidth]{imgs/screenshot010}\\
-	      	
-	      	\textbf{\texttt{months/}}
-	      	
-	      	\includegraphics[width=\linewidth]{imgs/screenshot011}\\
-	      	
-	      	\textbf{\texttt{sd/}}
-	      	
-	      	\includegraphics[width=\linewidth]{imgs/screenshot012}\\
-	      	
-	      \pagebreak
-	      	
-	      	\textbf{\texttt{temp/}}
-	      	
-	      	\includegraphics[width=\linewidth]{imgs/screenshot013}\\
+		      \textbf{\texttt{health/}}
+
+		      \includegraphics[width=\linewidth]{imgs/screenshot009}\\
+
+		      \textbf{\texttt{maxdiff/}}
+
+		      \includegraphics[width=\linewidth]{imgs/screenshot010}\\
+
+		      \textbf{\texttt{months/}}
+
+		      \includegraphics[width=\linewidth]{imgs/screenshot011}\\
+
+		      \textbf{\texttt{sd/}}
+
+		      \includegraphics[width=\linewidth]{imgs/screenshot012}\\
+
+		      \pagebreak
+
+		      \textbf{\texttt{temp/}}
+
+		      \includegraphics[width=\linewidth]{imgs/screenshot013}\\
 	      \end{center}
-	      
+
 \end{itemize}
+
+\section{Pasos a seguir}
+\subsection{Despliegue de la infraestructura}
+\begin{itemize}[label=\textbullet]
+	\item Paso 1: Infraestructura Base
+	      \begin{enumerate}
+		      \item Acceder a la consola de CloudFormation.
+		      \item Crear ua nueva pila con \textbf{\texttt{proy-infraestructura-soporte.yaml}}
+		      \item Esperar cmpletado (crea: VPC, Subnets, S3, DynamoDB, EC2, SNS)
+		      \item Verificar que la instancia EC2 haya subido la imagen a ECR.
+	      \end{enumerate}
+	\item Paso 2: Pipeline de Datos Lambda
+	      \begin{enumerate}[label=\arabic*)]
+		      \item Crear nueva pila con \textbf{\texttt{proy-lambda\_bucket.yaml}}
+              \item Configurar parámetros:
+                \begin{itemize}[label=\textbullet]
+                    \item \textbf{Email}: Correo electrónico para notificaciones SNS, se debe confirmar la suscripción para recibir los mensajes de alerta.
+                    \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}  
+                \end{itemize} 
+            \item Esperar completado (crea: Lambda Bucket S3 raw, Topic SNS)
+	      \end{enumerate}
+      \item Paso 3: Clúster ECS y Aplicación
+          \begin{enumerate}
+              \item Crear nueva pila con \textbf{\texttt{proy-infraestructura-cluster.yaml}} 
+              \item Configurar parámetro:
+                  \begin{itemize}[label=\textbullet]
+                      \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}
+                  \end{itemize}
+              \item Esperar completado (crea: ECS Cluster, ALB, Target Group, Service)
+              \item Anota la URL del ALB de los Outputs.
+          \end{enumerate}
+\end{itemize}
+\subsection{Carga de Datos y Verificación}
+\subsubsection{Ingesta de Datos}
+\begin{enumerate}
+    \item Acceder al bucket S3: \textbf{\texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}}
+    \item Subir archivos CSV de temperatura (formato requerido):
+        \begin{verbatim}
+Fecha,Medias,Desviaciones
+2017/03/22,16.784072875976562,0.28715428709983826
+        \end{verbatim}
+    \item Verificar ejecución automática de Lambda en CloudWatch Logs.
+    \item Confirmar datos en DynamoDB (table \textbf{\texttt{Measures}}).
+\end{enumerate}
+
+\subsubsection{Prueba de Endpoints}
+Desde un navegador o herramienta como Postman/curl:
+
+\begin{verbatim}
+# Health Check
+http://[ALB-DNS]/health
+
+# Temperatura media
+http://[ALB-DNS]/temp?month=3&year=2017
+
+# Desviación estándar
+http://[ALB-DNS]/sd?month=3&year=2017
+
+# Diferencia máxima
+http://[ALB-DNS]/maxdiff?month=4&year=2017
+
+# Meses disponibles
+http://[ALB-DNS]/months
+\end{verbatim}
+
+\subsection{Eliminación de la Infraestructura}
+
+\textbf{Orden de eliminación (crítico para evitar errores):}
+
+\begin{enumerate}
+    \item Vaciar buckets S3:
+        \begin{itemize}
+            \item \texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}
+            \item \texttt{proy-marmenor-codebucket-[ACCOUNT-ID]}
+        \end{itemize}
+    \item Eliminar imagen de ECR: \texttt{aquasense-api}
+    \item Eliminar pilas CloudFormation en orden inverso:
+        \begin{enumerate}[label=\arabic*.]
+            \item \texttt{proy-infraestructura-cluster}
+            \item \texttt{proy-lambda\_bucket}
+            \item \texttt{proy-infraestructura-soporte}
+        \end{enumerate}
+    \item Verificar eliminación de tabla DynamoDB
+    \item Verificar eliminación de suscripciones SNS
+\end{enumerate}
+
+\textbf{Nota}: Esperar 2-3 minutos entre eliminaciones para evitar dependencias.
+\section{Anexos}
+
+\subsection{Anexo A - Código Fuente Completo}
+
+\subsubsection{A.1 Función Lambda de Procesamiento}
+\textbf{Archivo}: \texttt{funcion\_lambda.py}
+
+\begin{itemize}
+    \item \textbf{Propósito}: Procesa archivos CSV y actualiza DynamoDB
+    \item \textbf{Características}:
+        \begin{itemize}
+            \item Procesamiento de múltiples archivos simultáneos
+            \item Detección y sobrescritura de duplicados
+            \item Ajuste automático de mes (días $\le 3\to$ mes anterior)
+            \item Envío de alertas SNS (desviación $>$ 0.5°C)
+            \item Cálculo de métricas mensuales agregadas
+        \end{itemize}
+    \item \textbf{Triggers}: S3 ObjectCreated en \texttt{*.csv}
+    \item \textbf{Runtime}: Python 3.11
+    \item \textbf{Timeout}: 60 segundos
+    \item \textbf{Memoria}: 256 MB
+\end{itemize}
+
+\textit{Ver código completo en repositorio GitHub o archivo adjunto}
+
+\subsubsection{A.2 API REST - Servidor Web}
+\textbf{Archivo}: \texttt{aquasense.py}
+
+\begin{itemize}
+    \item \textbf{Framework}: Flask 3.0.0
+    \item \textbf{Endpoints implementados}: 6
+    \item \textbf{Base de datos}: DynamoDB (tabla plana)
+    \item \textbf{Puerto}: 8080
+    \item \textbf{Health check}: \texttt{/health} (para ALB)
+\end{itemize}
+
+\subsection{Anexo B - Plantillas de Infraestructura como Código}
+
+\subsubsection{B.1 Infraestructura Base}
+\textbf{Archivo}: \texttt{proy-infraestructura-soporte.yaml}
+
+\textbf{Recursos creados}:
+\begin{itemize}
+    \item VPC (192.168.0.0/16)
+    \item 2 Subnets públicas + 2 privadas
+    \item Internet Gateway + NAT Gateway
+    \item Security Groups (ALB, Instancias)
+    \item Tabla DynamoDB: \texttt{Measures}
+    \item Bucket S3: \texttt{proy-marmenor-codebucket}
+    \item Instancia EC2 para construcción Docker
+\end{itemize}
+
+\subsubsection{B.2 Pipeline Lambda}
+\textbf{Archivo}: \texttt{proy-lambda\_bucket.yaml}
+
+\textbf{Recursos creados}:
+\begin{itemize}
+    \item Función Lambda: \texttt{proy-marmenor-process-csv}
+    \item Bucket S3: \texttt{proy-marmenor-csv-raw}
+    \item Topic SNS: \texttt{proy-marmenor-alerts}
+    \item Permisos de invocación S3 → Lambda
+\end{itemize}
+
+\subsubsection{B.3 Clúster ECS}
+\textbf{Archivo}: \texttt{proy-infraestructura-cluster.yaml}
+
+\textbf{Recursos creados}:
+\begin{itemize}
+    \item ECS Cluster: \texttt{proy-marmenor-cluster}
+    \item Application Load Balancer + Listener
+    \item Target Group (Health check: \texttt{/health})
+    \item Task Definition (awsvpc, 256 CPU, 256 RAM)
+    \item ECS Service (Launch Type: EC2, DesiredCount: 3)
+    \item Auto Scaling Group (min: 2, max: 5)
+\end{itemize}
+
+\subsection{Anexo C - Configuración Docker}
+
+\subsubsection{C.1 Dockerfile}
+\textbf{Archivo}: \texttt{Dockerfile.txt}
+
+\textbf{Características}:
+\begin{itemize}
+    \item Imagen base: \texttt{python:3.11-slim}
+    \item Servidor: Gunicorn (2 workers, 4 threads)
+    \item Puerto expuesto: 8080
+    \item Health check: curl a \texttt{/health} cada 30s
+    \item Usuario no-root (appuser:1000)
+\end{itemize}
+
+\subsubsection{C.2 Script de Automatización}
+\textbf{Archivo}: \texttt{docker\_setup.sh}
+
+\textbf{Acciones}:
+\begin{enumerate}
+    \item Instalación y configuración de Docker
+    \item Descarga de código desde GitHub
+    \item Construcción de imagen Docker
+    \item Creación de repositorio ECR
+    \item Autenticación en ECR
+    \item Push de imagen a ECR
+\end{enumerate}
+
+\subsection{Anexo D - Estructura de Datos}
+
+\subsubsection{D.1 Formato CSV de Entrada}
+\begin{verbatim}
+Fecha,Medias,Desviaciones
+2017/03/22,16.784072875976562,0.28715428709983826
+2017/03/30,17.32989501953125,0.4037204384803772
+\end{verbatim}
+
+\textbf{Notas}:
+\begin{itemize}
+    \item Separador: coma (,)
+    \item Encoding: UTF-8
+    \item Formato fecha: YYYY/MM/DD o YYYY-MM-DD
+    \item Headers obligatorios: Fecha, Medias, Desviaciones
+\end{itemize}
+
+\subsubsection{D.2 Esquema DynamoDB}
+\textbf{Tabla}: \texttt{Measures}
+
+\textbf{Estructura}:
+\begin{itemize}
+    \item \textbf{Partition Key}: \texttt{monthYear} (String, "YYYY-MM")
+    \item \textbf{Atributos}:
+        \begin{itemize}
+            \item \texttt{max\_temp}: Decimal
+            \item \texttt{max\_sd}: Decimal
+            \item \texttt{mean\_temp}: Decimal
+            \item \texttt{max\_diff\_temp}: Decimal
+            \item \texttt{mean\_temp\_count}: Number
+            \item \texttt{last\_updated}: String (ISO 8601)
+        \end{itemize}
+\end{itemize}
+
+\subsection{Anexo E - Ejemplos de Respuestas API}
+
+\subsubsection{E.1 Endpoint: /temp}
+\begin{verbatim}
+GET http://[ALB-DNS]/temp?month=3&year=2017
+
+Response (200 OK):
+{
+  "month": 3,
+  "year": 2017,
+  "temp": 17.06,
+  "max_temp": 17.33,
+  "last_updated": "2024-12-07T10:30:00Z"
+}
+\end{verbatim}
+
+\subsubsection{E.2 Endpoint: /sd}
+\begin{verbatim}
+GET http://[ALB-DNS]/sd?month=3&year=2017
+
+Response (200 OK):
+{
+  "month": 3,
+  "year": 2017,
+  "sd": 0.6254,
+  "last_updated": "2024-12-07T10:30:00Z"
+}
+\end{verbatim}
+
+\subsubsection{E.3 Endpoint: /maxdiff}
+\begin{verbatim}
+GET http://[ALB-DNS]/maxdiff?month=4&year=2017
+
+Response (200 OK):
+{
+  "month": 4,
+  "year": 2017,
+  "maxdiff": 2.14,
+  "max_temp": 19.47,
+  "last_updated": "2024-12-07T10:30:00Z"
+}
+\end{verbatim}
 \end{document}
