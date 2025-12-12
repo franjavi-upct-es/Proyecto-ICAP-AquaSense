@@ -1,22 +1,13 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  Application Template: Crea la infraestructura básica (DB, S3, VPC, SNS) e integra la función Lambda.
+  Application Template: Crea la infraestructura básica (DB, S3, VPC, SNS) 
 
-##################
-## Metadata
-##################
-
-Metadata:
-  License: Apache-2.0
 
 ######################
 # Parameters section
 ######################
 
-Parameters:
-
-
-  
+Parameters:  
   # AMI
   AmazonLinuxAMIID:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
