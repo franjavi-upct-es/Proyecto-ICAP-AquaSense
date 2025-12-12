@@ -11,10 +11,12 @@
 !include AWSPuml/Groups/VPC.puml
 !include AWSPuml/Groups/Region.puml
 !include AWSPuml/Groups/PublicSubnet.puml
+!include AWSPuml/Groups/PrivateSubnet.puml
 !include AWSPuml/Groups/AvailabilityZone.puml
 !include AWSPuml/Groups/SecurityGroup.puml
 !include AWSPuml/General/AuthenticatedUser.puml
 !include AWSPuml/NetworkingContentDelivery/VPCInternetGateway.puml
+!include AWSPuml/NetworkingContentDelivery/VPCNATGateway.puml
 !include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
 !include AWSPuml/Storage/SimpleStorageServiceBucket.puml
 !include AWSPuml/ApplicationIntegration/SimpleNotificationServiceEmailNotification.puml
@@ -25,7 +27,6 @@
 !include AWSPuml/Containers/ElasticContainerRegistryImage.puml
 !include AWSPuml/Containers/ElasticContainerRegistry.puml
 !include AWSPuml/Containers/ElasticContainerService.puml
-!include AWSPuml/Containers/Fargate.puml
 
 hide stereotype
 skinparam linetype ortho
@@ -38,19 +39,18 @@ AWSCloudGroup(aws_cloud) {
         ' --- CAPAS SUPERIORES (Invisibles) ---
         ' Usamos " " para quitar el titulo y #line:transparent para quitar el borde
         rectangle " " as logic_layer #line:transparent {
-        
-            AuthenticatedUser(user, "", "")
-            SimpleStorageServiceBucket(s3_bucket, "Bucket", "")
-            Lambda(lambda, "AWS Lambda", "")
-            SimpleNotificationService(sns, "SNS", "")
-            SimpleNotificationServiceEmailNotification(notification, "Notification", "")
+            AuthenticatedUser(user, "Analista", "")
         }
 
         rectangle " " as artifact_layer #line:transparent {
-             DynamoDB(dynamodb, "DynamoDB", "")
-             ElasticContainerServiceTask(tasks, "proy-AS-Task", "")
-             ElasticContainerRegistryImage(image, "", "")
-             ElasticContainerRegistry(ecr, "proy-repo-aquasense", "")
+            SimpleStorageServiceBucket(s3_bucket, "S3 Raw Bucket", "")
+            Lambda(lambda, "proy-marmenor-process-csv", "")
+            DynamoDB(dynamodb, "DynamoDB", "")
+            SimpleNotificationService(sns, "SNS Topic", "")
+            SimpleNotificationServiceEmailNotification(notification, "Email", "")
+            ElasticContainerRegistryImage(image, "Docker Image", "")
+            ElasticContainerRegistry(ecr, "proy-repo-aquasense", "")
+            ElasticContainerServiceTask(tasks, "proy-AS-Task", "")
         }
 
         ' --- VPC ---
@@ -66,21 +66,28 @@ AWSCloudGroup(aws_cloud) {
                 
                 ' 1. Zona A (Izquierda)
                 AvailabilityZoneGroup(az_A, "Availability Zone A (us-east-1a)") {
-                    PublicSubnetGroup(az_A_public, "proy-public-subnet-zone1\n192.168.1.0/24") {
-                        Fargate(fargate1, "Fargate", "")
+                    PublicSubnetGroup(az_A_public, "proy-public-subnet-zone1\n192.168.0.0/24") {
+                        VPCNATGateway(nat_gw, "NAT Gateway", "")
+                        rectangle " " as az_A_public_ph #line:transparent
+                    }
+                    PrivateSubnetGroup(az_A_private, "proy-private-subnet-zone1\n192.168.1.0/24") {
+                        EC2Instance(ec2_a1, "ECS EC2 Instance", "Capacity (ASG)")
                     }
                 }
 
                 ' 2. Centro (Invisibilizado)
                 rectangle " " as center_stack #line:transparent {
-                    EC2AutoScaling(autoscaling, "AutoScaling", "")
+                    EC2AutoScaling(autoscaling, "ECSAutoScalingGroup\n+ ECSLaunchConfiguration", "")
                     ElasticContainerService(ecs, "proy-AS-Cluster", "")
                 }
 
                 ' 3. Zona B (Derecha)
                 AvailabilityZoneGroup(az_B, "Availability Zone B (us-east-1b)") {
-                    PublicSubnetGroup(az_B_public, "proy-public-subnet-zone2\n192.168.2.0/24") {
-                        Fargate(fargate2, "Fargate", "")
+                    PublicSubnetGroup(az_B_public, "proy-public-subnet-zone2\n192.168.3.0/24") {
+                        rectangle " " as az_B_public_ph #line:transparent
+                    }
+                    PrivateSubnetGroup(az_B_private, "proy-private-subnet-zone2\n192.168.2.0/24") {
+                        EC2Instance(ec2_b1, "ECS EC2 Instance", "Capacity (ASG)")
                     }
                 }
             }
@@ -105,6 +112,14 @@ igw -left-> alb
 alb -left-> service
 service -down-> autoscaling
 autoscaling -down-> ecs
+
+' Salida a Internet para subredes privadas (NAT)
+nat_gw -up-> igw
+nat_gw -down-> ec2_a1
+nat_gw -down-> ec2_b1
+
+autoscaling -down-> ec2_a1
+autoscaling -down-> ec2_b1
 
 ' --- LAYOUT HINTS ---
 

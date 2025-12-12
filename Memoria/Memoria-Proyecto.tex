@@ -1,8 +1,8 @@
-\documentclass[11pt]{article}
+\documentclass[10pt]{article}
 \usepackage{setspace}
 \usepackage{enumitem}
 \usepackage{fullpage}
-\usepackage[utf8]{inputenc}
+\usepackage{inputenc, fontenc}
 \usepackage{hyperref}
 \usepackage[a4paper, left=2cm, right=2cm, top=2cm, bottom=1.5cm]{geometry}
 \setstretch{1.3}
@@ -10,6 +10,51 @@
 \usepackage{graphicx}
 \usepackage{longtable}
 \usepackage{array}
+\usepackage{listings}
+\usepackage{emoji}
+\lstset{
+	language=Python,
+	basicstyle=\ttfamily\small,
+	numberstyle=\tiny,
+	keywordstyle=\color{blue},
+	commentstyle=\color{olive},
+	stringstyle=\color{red},
+	breakatwhitespace=false, 
+	breaklines=true,
+	showspaces=false,
+	showstringspaces=false,
+	showtabs=false, 
+	tabsize=2,
+	literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1{ñ}{{\~n}}1 {Á}{{\'A}}1 {Í}{{\'I}}1 {Ú}{{\'U}}1 {¿}{{\textexclamdown}}1,
+	mathescape=false,
+	backgroundcolor=\color{lightgray!10}
+}
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,y,n},
+  keywordstyle=\color{blue}\bfseries,
+  basicstyle=\ttfamily\small,
+  sensitive=false,
+  comment=[l]{\#},
+  morecomment=[l]{\#},
+  morestring=[b]',
+  morestring=[b]",
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible
+}
+\lstdefinelanguage{docker}{
+  keywords={true,false,null,y,n},
+  keywordstyle=\color{blue}\bfseries,
+  basicstyle=\ttfamily\small,
+  sensitive=false,
+  comment=[l]{\#},
+  morecomment=[l]{\#},
+  morestring=[b]',
+  morestring=[b]",
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible
+}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \renewcommand*\contentsname{\color{black}Índice} 
 \title{Infraestructura para la Computación de Altas Prestaciones\\Proyecto Final: AquaSenseCloud}
@@ -21,46 +66,46 @@
 \tableofcontents
 \newpage
 \section{Cronograma}
-\begin{longtable}{|p{2.5cm}|p{8cm}|p{2.5cm}|p{2cm}|}
+\begin{longtable}{|p{2.5cm}|p{9cm}|p{3cm}|p{2cm}|}
 	\hline
-	\textbf{Fecha}       & \textbf{Tarea}                                                                                                                                                  & \textbf{Responsable} & \textbf{Duración} \\
+	\textbf{Fecha}       & \textbf{Tarea}                                                                                                                                                                                                                               & \textbf{Responsable} & \textbf{Duración} \\
 	\hline
 	\endhead
 
 	% SEMANA 1
-	11 de noviembre      & \textbf{Inicio y Diseño de Arquitectura:} Definición de requisitos, análisis del dataset CSV y diseño de la arquitectura completa en AWS y endpoints de la API. & Todo el Equipo       & 1 día             \\
+	11 de noviembre      & \textbf{Inicio y Diseño de Arquitectura:} Definición de requisitos, análisis del dataset CSV y diseño de la arquitectura completa en AWS y endpoints de la API.                                                                              & Todo el Equipo       & 1 día             \\
 	\hline
-	12-13 de noviembre   & \textbf{Infraestructura de Red Base:} Creación de VPC, subnets, Security Groups, bucket S3 para datos crudos y tablas en DynamoDB.                              & Javier Moreno        & 2 días            \\
+	12-13 de noviembre   & \textbf{Infraestructura de Red Base:} Creación de VPC, subnets, Security Groups, bucket S3 para datos crudos y tablas en DynamoDB.                                                                                                           & Javier Moreno        & 2 días            \\
 	\hline
-	14-15 de noviembre   & \textbf{Lógica de Negocio y Pipeline:} Desarrollo de funciones Lambda para procesamiento de CSV y cálculos estadísticos (maxdiff, temp mensual).                & Pablo Meseguer       & 2 días            \\
+	14-15 de noviembre   & \textbf{Lógica de Negocio y Pipeline:} Desarrollo de funciones Lambda para procesamiento de CSV y cálculos estadísticos (maxdiff, temp mensual).                                                                                             & Pablo Meseguer       & 2 días            \\
 	\hline
-	16-17 de noviembre   & \textbf{Configuración API Base:} Configuración del API Gateway y desarrollo de Lambdas para endpoints REST básicos (/sd, /temp).                                & Fco. Jav. Mercader   & 2 días            \\
+	16-17 de noviembre   & \textbf{Configuración API Base:} Configuración del API Gateway y desarrollo de Lambdas para endpoints REST básicos (/sd, /temp).                                                                                                             & Fco. Jav. Mercader   & 2 días            \\
 	\hline
 
 	% SEMANA 2
-	18-19 de noviembre   & \textbf{Seguridad y Automatización:} Configuración de roles IAM, políticas de seguridad y creación de plantillas CloudFormation base (IaC).                     & Javier Moreno        & 2 días            \\
+	18-19 de noviembre   & \textbf{Seguridad y Automatización:} Configuración de roles IAM, políticas de seguridad y creación de plantillas CloudFormation base (IaC).                                                                                                  & Javier Moreno        & 2 días            \\
 	\hline
-	20-21 de noviembre   & \textbf{Sistema de Alarmas:} Configuración de SNS Topic, integración de alertas por desviación de datos y pruebas de envío de emails.                           & Pablo Meseguer       & 2 días            \\
+	20-21 de noviembre   & \textbf{Sistema de Alarmas:} Configuración de SNS Topic, integración de alertas por desviación de datos y pruebas de envío de emails.                                                                                                        & Pablo Meseguer       & 2 días            \\
 	\hline
-	22-24 de noviembre   & \textbf{Integración y Pruebas:} Integración de todas las Lambdas con DynamoDB, manejo de errores en API y creación de suite de pruebas en Postman.              & Fco. Jav. Mercader   & 3 días            \\
+	22-24 de noviembre   & \textbf{Integración y Pruebas:} Integración de todas las Lambdas con DynamoDB, manejo de errores en API y creación de suite de pruebas en Postman.                                                                                           & Fco. Jav. Mercader   & 3 días            \\
 	\hline
 
 	% SEMANA 3
-	25-26 de noviembre   & \textbf{Dockerización:} Creación de Dockerfile optimizado para la API, construcción de imagen y subida al repositorio ECR.                                      & Pablo Meseguer       & 2 días            \\
+	25-26 de noviembre   & \textbf{Dockerización:} Creación de Dockerfile optimizado para la API, construcción de imagen y subida al repositorio ECR.                                                                                                                   & Pablo Meseguer       & 2 días            \\
 	\hline
-	27-28 de noviembre   & \textbf{Infraestructura Avanzada (ECS):} Configuración de Application Load Balancer (ALB), Target Groups y creación del clúster ECS Fargate.                    & Javier Moreno        & 2 días            \\
+	27-28 de noviembre   & \textbf{Infraestructura Avanzada (ECS sobre EC2):} Configuración de Application Load Balancer (ALB), Target Groups y Listener, creación del clúster ECS (\textbf{\texttt{Launch Type: EC2}}), Task Definition EC2 y ECS Service.             & Javier Moreno        & 2 días            \\
 	\hline
-	29 de nov - 1 de dic & \textbf{Escalabilidad:} Configuración de Auto Scaling Groups, políticas de escalado basadas en métricas y ejecución de pruebas de carga.                        & Fco. Jav. Mercader   & 3 días            \\
+	29 de nov - 1 de dic & \textbf{Escalabilidad (capacidad EC2):} Configuración de ECSLaunchConfiguration y ECSAutoScalingGroup (\texttt{\textbf{MinSize=2, MaxSize=5, DesiredCapacity=3}}) como capacidad del clúster ECS, y validación de funcionamiento bajo carga. & Fco. Jav. Mercader   & 3 días            \\
 	\hline
 
 	% SEMANA 4
-	2 de diciembre       & \textbf{Documentación Técnica:} Redacción de la memoria técnica, diagramas finales de arquitectura y justificación de decisiones.                               & Javier Moreno        & 1 día             \\
+	2 de diciembre       & \textbf{Documentación Técnica:} Redacción de la memoria técnica, diagramas finales de arquitectura y justificación de decisiones.                                                                                                            & Javier Moreno        & 1 día             \\
 	\hline
-	3 de diciembre       & \textbf{Manual de Replicación:} Elaboración de guía paso a paso para replicar el despliegue y scripts de limpieza de recursos.                                  & Pablo Meseguer       & 1 día             \\
+	3 de diciembre       & \textbf{Manual de Replicación:} Elaboración de guía paso a paso para replicar el despliegue y scripts de limpieza de recursos.                                                                                                               & Pablo Meseguer       & 1 día             \\
 	\hline
-	4 de diciembre       & \textbf{Pruebas Finales y Despliegue:} Despliegue final limpio en cuentas AWS Academy y validación "End-to-End" de todo el flujo.                               & Todo el Equipo       & 1 día             \\
+	4 de diciembre       & \textbf{Pruebas Finales y Despliegue:} Despliegue final limpio en cuentas AWS Academy y validación "End-to-End" de todo el flujo.                                                                                                            & Todo el Equipo       & 1 día             \\
 	\hline
-	5 de diciembre       & \textbf{Entrega Final:} Recopilación de entregables, preparación de material de defensa y envío del proyecto.                                                   & Todo el Equipo       & 1 día             \\
+	5 de diciembre       & \textbf{Entrega Final:} Recopilación de entregables, preparación de material de defensa y envío del proyecto.                                                                                                                                & Todo el Equipo       & 1 día             \\
 	\hline
 \end{longtable}
 
@@ -93,12 +138,17 @@
 	      \begin{itemize}[label=\textbullet]
 		      \item \textbf{Instancia EC2 (AWS::EC2::Instance):} Utilizada para desarrollar, probar y ajustar el contenedor con la aplicación AquaSense. En esta instancia se configuró el entorno de Docker y se realizaron pruebas locales antes de enviar la imagen al repositorio de ECR.
 	      \end{itemize}
-	\item \textbf{Infraestructura de red y conectividad}
+	\item\textbf{ Infraestructura de red y conectividad}
 	      \begin{itemize}[label=\textbullet]
 		      \item \textbf{VPC (AWS::EC2::VPC):} Proporciona un entorno de red aislado donde se despliegan los recursos de la infraestructura.
-		      \item \textbf{Subnets (AWS::EC2::Subnet):} Crea subredes públicas que permiten el acceso a Internet para los recursos dentro de la VPC.
-		      \item \textbf{Internet Gateway (AWS::EC2::InternetGateway):} Facilita la conexión de la VPC a Internet, permitiendo que los analistas accedan a los servicios configurados y desplegados.
-		      \item \textbf{Route Table (AWS::EC2::RouteTable):} Define las rutas de tráfico de red dentro de la VPC, asegurando que el tráfico fluya adecuadamente entre las subredes y el Internet Gateway.
+
+		      \item \textbf{Subnets (AWS::EC2::Subnet):} Se crean 2 subredes públicas y 2 subredes privadas distribuidas en distintas Availability Zones. Las subredes públicas alojan los componentes de entrada/salida a Internet (p. ej., NAT Gateway) y las privadas alojan los recursos de cómputo internos (ECS sobre EC2 y tareas en modo awsvpc).
+
+		      \item \textbf{Internet Gateway (AWS::EC2::InternetGateway):} Conecta la VPC con Internet, permitiendo la exposición del ALB.
+
+		      \item \textbf{NAT Gateway (AWS::EC2::NatGateway):} Proporciona salida a Internet a los recursos ubicados en subredes privadas sin exponerlos directamente. Se ubica en una subred pública y se utiliza como ruta por defecto (0.0.0.0/0) desde la tabla de rutas privada.
+
+		      \item \textbf{Route Table (AWS::EC2::RouteTable):} Define las rutas de tráfico dentro de la VPC. Incluye una tabla pública con salida al Internet Gateway y una tabla privada con salida al NAT Gateway, asociadas a sus respectivas subredes.
 	      \end{itemize}
 	\item \textbf{Almacenamiento de imágenes}
 	      \begin{itemize}[label=\textbullet]
@@ -113,20 +163,15 @@
 	      \end{itemize}
 	\item \textbf{Definición y gestión de tareas}
 	      \begin{itemize}[label=\textbullet]
-		      \item \textbf{ECSTaskDefinition (AWS::ECS::TaskDefinition):} Este recurso describe las configuraciones necesarias para ejecutar contenedores en ECS. Especifica detalles como la imagen del contenedor a usar, la cantidad de CPU y memoria asignada, y la compatibildiad con el modo Fargate, que permite ejecutar contenedores sin gestionar servidores subyacentes. Además, define un mapeo de puertos, asignando el puerto anterior del contenedor (5000) al tráfico entrante. Es el punto central de la especificación para las tareas ECS.
+		      \item \textbf{ECSTaskDefinition (AWS::ECS::TaskDefinition):} Describe la definición de tarea para ejecutar el contenedor en ECS con compatibilidad EC2 (RequiresCompatibilities: EC2) y modo de red awsvpc. Especifica la imagen del contenedor en ECR, los recursos asignados (CPU y memoria), el mapeo de puertos (ContainerPort: 8080) y los roles (ExecutionRoleArn y TaskRoleArn). Es la plantilla base a partir de la cual ECS lanza las tareas.
 
-		            Describe los contenedores que ejecutan la aplicación AquaSense, incluyendo la configuración de recursos (CPU, memoria) y el puerto utilizado (5000).
-		      \item \textbf{ECSService (AWS::ECS::Service):} Administra la ejecución de las tareas ECS, asegura la ejecución continua de un número deseado de tareas definidas en la configuración de tarea. En este caso, se garantiza que siempre haya dos tareas activas para manejar las solicitudes entrantes. Se utiliza el modo de lanzamiento Fargate para simplificar la gestión de la infraestructura. El servicio monitorea las tareas y las reinicia automáticamente si fallan, garantizando alta disponibildiad y resiliencia para nuestra aplicación.
+		      \item \textbf{ECSService (AWS::ECS::Service):} Administra la ejecución continua del número deseado de tareas (DesiredCount: 3) a partir de la Task Definition anterior, usando LaunchType: EC2. Integra el servicio con el ALB mediante el Target Group, y ejecuta las tareas en subredes privadas (AssignPublicIp: DISABLED) con los Security Groups importados del stack de red. La disponibilidad real del servicio depende de la capacidad aportada por el Auto Scaling Group de instancias EC2.
 	      \end{itemize}
 	\item \textbf{Escalado automático}
 	      \begin{itemize}[label=\textbullet]
-		      \item \textbf{ECS Scalable Target (AWS::ApplicationAutoScaling::ScalableTarget):} Define el rango de capacidad del servicio ECS, asegurando que el número de tareas FARGATE activas esté entre un mínimo de 2 y máximo de 10. Este recurso actúa como el objetivo escalable que la política de escalado monitorea y ajusta según las métricas configuradas. Está asociado al recurso ECSService y permite mantener un nivel óptimo de disponibilidad y desempeño de nuestra aplicación.
+		      \item \textbf{ECSLaunchConfiguration (AWS::AutoScaling::LaunchConfiguration):} Define la configuración de las instancias EC2 que aportan capacidad al clúster ECS (AMI optimizada de ECS, tipo de instancia, Security Groups e Instance Profile). Incluye UserData para registrar automáticamente la instancia en el clúster ECS (\texttt{ECS\_CLUSTER=...}).
 
-		      \item \textbf{Scaling Policy (AWS::ApplicationAutoScaling::ScalingPolicy)}
-		            \begin{itemize}[label=$-$]
-			            \item \textbf{High CPU:} Implementa una política de escalado automático que aumenta la cantidad de tareas activas cuando la utilización promedio de CPU en el clúster ECS supera el 75\%. Esto asegura que la capacidad del servicio crezca dinámicamente para manejar un aumento en la carga de trabajo. Incluye un tiempo de enfriamiento (\textit{cooldown}) de 60 segundos para evitar ajustes excesivamente frecuentes.
-			            \item \textbf{Low CPU:} Establece una política de reducción de escala que disminuye el número de tareas activas cuando el uso de CPU cae por debajo del 25\%. Esto permite optimizar costos al liberar recursos durante periodos de baja demanda, manteniendo solo las tareas necesarias para sorportar la carga en ese momento. Similar a la política de escalado ascendente, aplica un enfriamiento de 60 segundos.
-		            \end{itemize}
+		      \item \textbf{ECSAutoScalingGroup (AWS::AutoScaling::AutoScalingGroup):} Proporciona la capacidad de cómputo al clúster ECS mediante un grupo de instancias EC2 desplegadas en subredes privadas. Se configura con MinSize=2, MaxSize=5 y DesiredCapacity=3. En este proyecto el escalado se realiza a nivel de instancias (capacidad del clúster), no a nivel de tareas mediante Application Auto Scaling.
 	      \end{itemize}
 	\item \textbf{Seguridad}
 	      \begin{itemize}[label=\textbullet]
@@ -228,6 +273,15 @@
 \section{Pasos a seguir}
 \subsection{Despliegue de la infraestructura}
 \begin{itemize}[label=\textbullet]
+	\item Paso 0 (Previo): Crear la clave (\textit{Key Pair}) "proy-marmenor"
+	      \begin{enumerate}
+		      Acciones :
+		      \item Ir a la consola de AWS $\rightarrow$ EC2 $\rightarrow$ Network \& Security $\rightarrow$ Key Pairs.
+		      \item Crear una nueva Key Pair con nombre: proy-marmenor.
+		      \item Descargar el fichero (formato .pem) y guardarlo de forma segura.
+
+		            \textbf{Nota:} debe crearse en la misma región donde se despliega la infraestructura (us-east-1). Si la clave no existe, la pila de CloudFormation que crea la instancia EC2 fallará.
+	      \end{enumerate}
 	\item Paso 1: Infraestructura Base
 	      \begin{enumerate}
 		      \item Acceder a la consola de CloudFormation.
@@ -238,35 +292,35 @@
 	\item Paso 2: Pipeline de Datos Lambda
 	      \begin{enumerate}[label=\arabic*)]
 		      \item Crear nueva pila con \textbf{\texttt{proy-lambda\_bucket.yaml}}
-              \item Configurar parámetros:
-                \begin{itemize}[label=\textbullet]
-                    \item \textbf{Email}: Correo electrónico para notificaciones SNS, se debe confirmar la suscripción para recibir los mensajes de alerta.
-                    \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}  
-                \end{itemize} 
-            \item Esperar completado (crea: Lambda Bucket S3 raw, Topic SNS)
+		      \item Configurar parámetros:
+		            \begin{itemize}[label=\textbullet]
+			            \item \textbf{Email}: Correo electrónico para notificaciones SNS, se debe confirmar la suscripción para recibir los mensajes de alerta.
+			            \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}
+		            \end{itemize}
+		      \item Esperar completado (crea: Lambda Bucket S3 raw, Topic SNS)
 	      \end{enumerate}
-      \item Paso 3: Clúster ECS y Aplicación
-          \begin{enumerate}
-              \item Crear nueva pila con \textbf{\texttt{proy-infraestructura-cluster.yaml}} 
-              \item Configurar parámetro:
-                  \begin{itemize}[label=\textbullet]
-                      \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}
-                  \end{itemize}
-              \item Esperar completado (crea: ECS Cluster, ALB, Target Group, Service)
-              \item Anota la URL del ALB de los Outputs.
-          \end{enumerate}
+	\item Paso 3: Clúster ECS y Aplicación
+	      \begin{enumerate}
+		      \item Crear nueva pila con \textbf{\texttt{proy-infraestructura-cluster.yaml}}
+		      \item Configurar parámetro:
+		            \begin{itemize}[label=\textbullet]
+			            \item \textbf{NetworkStackName:} \textbf{\texttt{proy-infraestructura-soporte}}
+		            \end{itemize}
+		      \item Esperar completado (crea: ECS Cluster, ALB, Target Group, Service)
+		      \item Anota la URL del ALB de los Outputs.
+	      \end{enumerate}
 \end{itemize}
 \subsection{Carga de Datos y Verificación}
 \subsubsection{Ingesta de Datos}
 \begin{enumerate}
-    \item Acceder al bucket S3: \textbf{\texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}}
-    \item Subir archivos CSV de temperatura (formato requerido):
-        \begin{verbatim}
+	\item Acceder al bucket S3: \textbf{\texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}}
+	\item Subir archivos CSV de temperatura (formato requerido):
+	      \begin{verbatim}
 Fecha,Medias,Desviaciones
 2017/03/22,16.784072875976562,0.28715428709983826
-        \end{verbatim}
-    \item Verificar ejecución automática de Lambda en CloudWatch Logs.
-    \item Confirmar datos en DynamoDB (table \textbf{\texttt{Measures}}).
+		  \end{verbatim}
+	\item Verificar ejecución automática de Lambda en CloudWatch Logs.
+	\item Confirmar datos en DynamoDB (table \textbf{\texttt{Measures}}).
 \end{enumerate}
 
 \subsubsection{Prueba de Endpoints}
@@ -294,20 +348,20 @@ http://[ALB-DNS]/months
 \textbf{Orden de eliminación (crítico para evitar errores):}
 
 \begin{enumerate}
-    \item Vaciar buckets S3:
-        \begin{itemize}
-            \item \texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}
-            \item \texttt{proy-marmenor-codebucket-[ACCOUNT-ID]}
-        \end{itemize}
-    \item Eliminar imagen de ECR: \texttt{aquasense-api}
-    \item Eliminar pilas CloudFormation en orden inverso:
-        \begin{enumerate}[label=\arabic*.]
-            \item \texttt{proy-infraestructura-cluster}
-            \item \texttt{proy-lambda\_bucket}
-            \item \texttt{proy-infraestructura-soporte}
-        \end{enumerate}
-    \item Verificar eliminación de tabla DynamoDB
-    \item Verificar eliminación de suscripciones SNS
+	\item Vaciar buckets S3:
+	      \begin{itemize}
+		      \item \texttt{proy-marmenor-csv-raw-[ACCOUNT-ID]}
+		      \item \texttt{proy-marmenor-codebucket-[ACCOUNT-ID]}
+	      \end{itemize}
+	\item Eliminar imagen de ECR: \texttt{aquasense-api}
+	\item Eliminar pilas CloudFormation en orden inverso:
+	      \begin{enumerate}[label=\arabic*.]
+		      \item \texttt{proy-infraestructura-cluster}
+		      \item \texttt{proy-lambda\_bucket}
+		      \item \texttt{proy-infraestructura-soporte}
+	      \end{enumerate}
+	\item Verificar eliminación de tabla DynamoDB
+	\item Verificar eliminación de suscripciones SNS
 \end{enumerate}
 
 \textbf{Nota}: Esperar 2-3 minutos entre eliminaciones para evitar dependencias.
@@ -319,33 +373,35 @@ http://[ALB-DNS]/months
 \textbf{Archivo}: \texttt{funcion\_lambda.py}
 
 \begin{itemize}
-    \item \textbf{Propósito}: Procesa archivos CSV y actualiza DynamoDB
-    \item \textbf{Características}:
-        \begin{itemize}
-            \item Procesamiento de múltiples archivos simultáneos
-            \item Detección y sobrescritura de duplicados
-            \item Ajuste automático de mes (días $\le 3\to$ mes anterior)
-            \item Envío de alertas SNS (desviación $>$ 0.5°C)
-            \item Cálculo de métricas mensuales agregadas
-        \end{itemize}
-    \item \textbf{Triggers}: S3 ObjectCreated en \texttt{*.csv}
-    \item \textbf{Runtime}: Python 3.11
-    \item \textbf{Timeout}: 60 segundos
-    \item \textbf{Memoria}: 256 MB
+	\item \textbf{Propósito}: Procesa archivos CSV y actualiza DynamoDB
+	\item \textbf{Características}:
+	      \begin{itemize}
+		      \item Procesamiento de múltiples archivos simultáneos
+		      \item Detección y sobrescritura de duplicados
+		      \item Ajuste automático de mes (días $\le 3\to$ mes anterior)
+		      \item Envío de alertas SNS (desviación $>$ 0.5°C)
+		      \item Cálculo de métricas mensuales agregadas
+	      \end{itemize}
+	\item \textbf{Triggers}: S3 ObjectCreated en \texttt{*.csv}
+	\item \textbf{Runtime}: Python 3.11
+	\item \textbf{Timeout}: 60 segundos
+	\item \textbf{Memoria}: 256 MB
 \end{itemize}
 
-\textit{Ver código completo en repositorio GitHub o archivo adjunto}
+\lstinputlisting[language=Python, escapechar={\@}]{../Ingesta Datos y Pipeline/funcion_lambda.py}
 
 \subsubsection{A.2 API REST - Servidor Web}
 \textbf{Archivo}: \texttt{aquasense.py}
 
 \begin{itemize}
-    \item \textbf{Framework}: Flask 3.0.0
-    \item \textbf{Endpoints implementados}: 6
-    \item \textbf{Base de datos}: DynamoDB (tabla plana)
-    \item \textbf{Puerto}: 8080
-    \item \textbf{Health check}: \texttt{/health} (para ALB)
+	\item \textbf{Framework}: Flask 3.0.0
+	\item \textbf{Endpoints implementados}: 6
+	\item \textbf{Base de datos}: DynamoDB (tabla plana)
+	\item \textbf{Puerto}: 8080
+	\item \textbf{Health check}: \texttt{/health} (para ALB)
 \end{itemize}
+
+\lstinputlisting[language=Python]{../Servidor Web y Containers/aquasense.py}
 
 \subsection{Anexo B - Plantillas de Infraestructura como Código}
 
@@ -354,39 +410,43 @@ http://[ALB-DNS]/months
 
 \textbf{Recursos creados}:
 \begin{itemize}
-    \item VPC (192.168.0.0/16)
-    \item 2 Subnets públicas + 2 privadas
-    \item Internet Gateway + NAT Gateway
-    \item Security Groups (ALB, Instancias)
-    \item Tabla DynamoDB: \texttt{Measures}
-    \item Bucket S3: \texttt{proy-marmenor-codebucket}
-    \item Instancia EC2 para construcción Docker
+	\item VPC (192.168.0.0/16)
+	\item 2 Subnets públicas + 2 privadas
+	\item Internet Gateway + NAT Gateway
+	\item Security Groups (ALB, Instancias)
+	\item Tabla DynamoDB: \texttt{Measures}
+	\item Bucket S3: \texttt{proy-marmenor-codebucket}
+	\item Instancia EC2 para construcción Docker
 \end{itemize}
+
+\lstinputlisting[language=yaml]{../Plantillas CloudFormation IaC/proy-infraestructura-soporte.yaml}
 
 \subsubsection{B.2 Pipeline Lambda}
 \textbf{Archivo}: \texttt{proy-lambda\_bucket.yaml}
 
 \textbf{Recursos creados}:
 \begin{itemize}
-    \item Función Lambda: \texttt{proy-marmenor-process-csv}
-    \item Bucket S3: \texttt{proy-marmenor-csv-raw}
-    \item Topic SNS: \texttt{proy-marmenor-alerts}
-    \item Permisos de invocación S3 → Lambda
+	\item Función Lambda: \texttt{proy-marmenor-process-csv}
+	\item Bucket S3: \texttt{proy-marmenor-csv-raw}
+	\item Topic SNS: \texttt{proy-marmenor-alerts}
+	\item Permisos de invocación S3 $\rightarrow$ Lambda
 \end{itemize}
 
+\lstinputlisting[language=yaml]{../Plantillas CloudFormation IaC/proy-lambda_bucket.yaml}
 \subsubsection{B.3 Clúster ECS}
 \textbf{Archivo}: \texttt{proy-infraestructura-cluster.yaml}
 
 \textbf{Recursos creados}:
 \begin{itemize}
-    \item ECS Cluster: \texttt{proy-marmenor-cluster}
-    \item Application Load Balancer + Listener
-    \item Target Group (Health check: \texttt{/health})
-    \item Task Definition (awsvpc, 256 CPU, 256 RAM)
-    \item ECS Service (Launch Type: EC2, DesiredCount: 3)
-    \item Auto Scaling Group (min: 2, max: 5)
+	\item ECS Cluster: \texttt{proy-marmenor-cluster}
+	\item Application Load Balancer + Listener
+	\item Target Group (Health check: \texttt{/health})
+	\item Task Definition (awsvpc, 256 CPU, 256 RAM)
+	\item ECS Service (Launch Type: EC2, DesiredCount: 3)
+	\item Auto Scaling Group (min: 2, max: 5)
 \end{itemize}
 
+\lstinputlisting[language=yaml]{../Plantillas CloudFormation IaC/proy-infraestructura-cluster.yaml}
 \subsection{Anexo C - Configuración Docker}
 
 \subsubsection{C.1 Dockerfile}
@@ -394,26 +454,30 @@ http://[ALB-DNS]/months
 
 \textbf{Características}:
 \begin{itemize}
-    \item Imagen base: \texttt{python:3.11-slim}
-    \item Servidor: Gunicorn (2 workers, 4 threads)
-    \item Puerto expuesto: 8080
-    \item Health check: curl a \texttt{/health} cada 30s
-    \item Usuario no-root (appuser:1000)
+	\item Imagen base: \texttt{python:3.11-slim}
+	\item Servidor: Gunicorn (2 workers, 4 threads)
+	\item Puerto expuesto: 8080
+	\item Health check: curl a \texttt{/health} cada 30s
+	\item Usuario no-root (appuser:1000)
 \end{itemize}
 
+\lstinputlisting[language=docker]{../Servidor Web y Containers/Dockerfile.txt}
 \subsubsection{C.2 Script de Automatización}
 \textbf{Archivo}: \texttt{docker\_setup.sh}
 
 \textbf{Acciones}:
 \begin{enumerate}
-    \item Instalación y configuración de Docker
-    \item Descarga de código desde GitHub
-    \item Construcción de imagen Docker
-    \item Creación de repositorio ECR
-    \item Autenticación en ECR
-    \item Push de imagen a ECR
+	\item Instalación y configuración de Docker
+	\item Descarga de código desde GitHub
+	\item Construcción de imagen Docker
+	\item Creación de repositorio ECR
+	\item Autenticación en ECR
+	\item Push de imagen a ECR
+	\item Descarga del código de la función Lambda (\texttt{funcion\_lambda.py}) y compresión en \texttt{lambda.zip}
+	\item Subida de \texttt{lambda.zip} al bucket S3 de código (\texttt{proy-marmenor-codebucket-<ACCOUNT\_ID>}) para que CloudFormation pueda desplegar la Lambda
 \end{enumerate}
 
+\lstinputlisting[language=bash]{../Plantillas CloudFormation IaC/docker_setup.sh}
 \subsection{Anexo D - Estructura de Datos}
 
 \subsubsection{D.1 Formato CSV de Entrada}
@@ -425,10 +489,10 @@ Fecha,Medias,Desviaciones
 
 \textbf{Notas}:
 \begin{itemize}
-    \item Separador: coma (,)
-    \item Encoding: UTF-8
-    \item Formato fecha: YYYY/MM/DD o YYYY-MM-DD
-    \item Headers obligatorios: Fecha, Medias, Desviaciones
+	\item Separador: coma (,)
+	\item Encoding: UTF-8
+	\item Formato fecha: YYYY/MM/DD o YYYY-MM-DD
+	\item Headers obligatorios: Fecha, Medias, Desviaciones
 \end{itemize}
 
 \subsubsection{D.2 Esquema DynamoDB}
@@ -436,16 +500,16 @@ Fecha,Medias,Desviaciones
 
 \textbf{Estructura}:
 \begin{itemize}
-    \item \textbf{Partition Key}: \texttt{monthYear} (String, "YYYY-MM")
-    \item \textbf{Atributos}:
-        \begin{itemize}
-            \item \texttt{max\_temp}: Decimal
-            \item \texttt{max\_sd}: Decimal
-            \item \texttt{mean\_temp}: Decimal
-            \item \texttt{max\_diff\_temp}: Decimal
-            \item \texttt{mean\_temp\_count}: Number
-            \item \texttt{last\_updated}: String (ISO 8601)
-        \end{itemize}
+	\item \textbf{Partition Key}: \texttt{monthYear} (String, "YYYY-MM")
+	\item \textbf{Atributos}:
+	      \begin{itemize}
+		      \item \texttt{max\_temp}: Decimal
+		      \item \texttt{max\_sd}: Decimal
+		      \item \texttt{mean\_temp}: Decimal
+		      \item \texttt{max\_diff\_temp}: Decimal
+		      \item \texttt{mean\_temp\_count}: Number
+		      \item \texttt{last\_updated}: String (ISO 8601)
+	      \end{itemize}
 \end{itemize}
 
 \subsection{Anexo E - Ejemplos de Respuestas API}
@@ -490,4 +554,5 @@ Response (200 OK):
   "last_updated": "2024-12-07T10:30:00Z"
 }
 \end{verbatim}
+
 \end{document}
