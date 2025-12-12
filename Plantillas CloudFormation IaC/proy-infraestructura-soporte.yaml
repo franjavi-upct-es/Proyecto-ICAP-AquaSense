@@ -15,11 +15,7 @@ Metadata:
 
 Parameters:
 
-  ExistingRoleArn:
-    Type: String
-    Description: ARN del rol IAM de ejecución existente (LabRole).
 
-    Default: arn:aws:iam::123456789012:role/LabRole
   
   # AMI
   AmazonLinuxAMIID:
@@ -354,7 +350,3 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DynamoDBTable"
 
-  ARNLabrol:
-    Value: !Ref ExistingRoleArn
-    Export:
-      Name: !Sub "${AWS::StackName}-ARNLabrol"
